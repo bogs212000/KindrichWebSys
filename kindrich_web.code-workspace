@@ -1,0 +1,13 @@
+{
+	"folders": [
+		{
+			"name": "kindrich_web",
+			"path": "."
+		},
+		{
+			"name": "canvasjs",
+			"path": "../../Downloads/canvasjs"
+		}
+	],
+	"settings": {}
+}
