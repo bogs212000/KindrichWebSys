@@ -688,7 +688,7 @@ document.head.insertAdjacentHTML('beforeend','<style>.records-panel #voucherFund
     let summary=document.querySelector('.cards.dashboard-summary');
     if(!summary||summary.querySelector('[data-to-be-collected-card]'))return;
     let ps=projects(),budget=ps.reduce((total,p)=>total+num(p.budget),0),collected=ps.reduce((total,p)=>total+totals(p).payed,0),toBeCollected=budget-collected;
-    summary.insertAdjacentHTML('beforeend','<div class="card" data-to-be-collected-card><label>To Be Collected</label><strong class="positive">'+money(toBeCollected)+'</strong><small>Project budgets - amount collected</small></div>');
+    summary.insertAdjacentHTML('beforeend','<div class="card" data-to-be-collected-card><label>Uncollected Contract Balance</label><strong class="positive">'+money(toBeCollected)+'</strong><small>Project budgets - amount collected</small></div>');
   };
   document.head.insertAdjacentHTML('beforeend','<style>.dashboard-summary{grid-template-columns:repeat(8,minmax(0,1fr))}@media(max-width:1100px){.dashboard-summary{grid-template-columns:repeat(4,minmax(0,1fr))}}@media(max-width:760px){.dashboard-summary{grid-template-columns:repeat(2,minmax(0,1fr))}}</style>');
 })();
@@ -1592,6 +1592,70 @@ body.dark-mode .dashboard-presence-head b{color:#f1f3f6}.dark-mode .dashboard-on
     if(!content.querySelector('[data-dashboard-presence]'))content.insertAdjacentHTML('afterbegin','<div class="dashboard-presence" data-dashboard-presence></div>');
     paintDashboardPresence();
   };
+})();
+</script>
+<style id="kindrich-actual-profit-summary">
+.actual-profit-card strong{font-size:18px!important}
+.actual-profit-card strong.positive{color:#138060!important}
+.actual-profit-card strong.negative{color:#bd4553!important}
+body.dark-mode .actual-profit-card strong.positive{color:#73e0bc!important}
+body.dark-mode .actual-profit-card strong.negative{color:#ff9aaa!important}
+</style>
+<style id="kindrich-dashboard-summary-five-column">
+.dashboard-summary{grid-template-columns:repeat(5,minmax(0,1fr))!important}
+@media(max-width:1100px){.dashboard-summary{grid-template-columns:repeat(3,minmax(0,1fr))!important}}
+@media(max-width:760px){.dashboard-summary{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
+</style>
+<script>
+(function(){
+  function canViewActualProfit(){
+    try{
+      const role=String(currentRole()?.name||'').toLowerCase().replace(/[\\s_-]/g,'');
+      return role==='admin'||role==='superadmin';
+    }catch{return false}
+  }
+  function actualProjectProfit(p,t){
+    const contractRevenue=num(p?.budget),totalCosts=num(t?.total);
+    return contractRevenue-totalCosts;
+  }
+  window.actualProjectProfit=actualProjectProfit;
+  const baseDashboardWithActualProfit=dashboard;
+  dashboard=function(){
+    baseDashboardWithActualProfit();
+    if(!canViewActualProfit())return;
+    const summary=document.querySelector('.cards.dashboard-summary');
+    if(!summary||summary.querySelector('[data-actual-profit-card]'))return;
+    const list=projects(),revenue=list.reduce((total,p)=>total+num(p?.budget),0),collected=list.reduce((total,p)=>total+num(totals(p)?.payed),0),costs=list.reduce((total,p)=>total+num(totals(p)?.total),0),profit=revenue-costs, tone=profit>=0?'positive':'negative';
+    const collectionDifference=collected-costs,differenceTone=collectionDifference>=0?'positive':'negative';
+    summary.insertAdjacentHTML('beforeend','<div class="card actual-profit-card" data-actual-profit-card><label>Estimated Actual Profit</label><strong class="'+tone+'">'+money(profit)+'</strong><small>Contract revenue - total project costs</small></div><div class="card actual-profit-card" data-collection-difference-card><label>Collected vs Expenses Difference</label><strong class="'+differenceTone+'">'+money(collectionDifference)+'</strong><small>Amount collected - total project costs</small></div>');
+  };
+  const baseDetailWithActualProfit=detail;
+  detail=function(){
+    baseDetailWithActualProfit();
+    if(!canViewActualProfit())return;
+    const summary=document.querySelector('.detail-summary .cards'),p=project();
+    if(!summary||!p||summary.querySelector('[data-actual-profit-card]'))return;
+    const projectTotals=totals(p),profit=actualProjectProfit(p,projectTotals),tone=profit>=0?'positive':'negative',collectionDifference=num(projectTotals.payed)-num(projectTotals.total),differenceTone=collectionDifference>=0?'positive':'negative';
+    summary.insertAdjacentHTML('beforeend','<div class="card actual-profit-card" data-actual-profit-card><label>Estimated Actual Profit</label><strong class="'+tone+'">'+money(profit)+'</strong><small>Contract revenue - total project costs</small></div><div class="card actual-profit-card" data-collection-difference-card><label>Collected vs Expenses Difference</label><strong class="'+differenceTone+'">'+money(collectionDifference)+'</strong><small>Amount collected - total project costs</small></div>');
+  };
+})();
+</script>
+<script>
+(function(){
+  function addRemainingBudgetToProjectDistribution(){
+    if(page!=='detail'||!window.Chart)return;
+    const p=project(),canvas=document.getElementById('kindrichChart-projectDistribution'),chart=canvas?Chart.getChart(canvas):null;
+    if(!p||!chart||chart.data.labels.includes('Remaining Budget'))return;
+    const remaining=Math.max(0,num(totals(p).balance)),dataset=chart.data.datasets[0];
+    chart.data.labels.push('Remaining Budget');
+    dataset.data.push(remaining);
+    dataset.backgroundColor=[...(dataset.backgroundColor||[]),'#7b61b8'];
+    dataset.borderColor=[...(Array.isArray(dataset.borderColor)?dataset.borderColor:[]),'#fff'];
+    chart.update();
+  }
+  const baseRenderWithRemainingBudget=render;
+  render=function(){baseRenderWithRemainingBudget();requestAnimationFrame(()=>requestAnimationFrame(addRemainingBudgetToProjectDistribution))};
+  if(loggedIn&&page==='detail')requestAnimationFrame(()=>requestAnimationFrame(addRemainingBudgetToProjectDistribution));
 })();
 </script>
 </body>
