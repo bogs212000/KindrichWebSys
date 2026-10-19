@@ -1,0 +1,11 @@
+{
+  "firestore": {
+    "rules": "firestore.rules.migration-draft"
+  },
+  "emulators": {
+    "singleProjectMode": true,
+    "firestore": {
+      "port": 8090
+    }
+  }
+}

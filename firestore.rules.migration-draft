@@ -1,0 +1,65 @@
+// Draft only. This file is intentionally not referenced by firebase.json.
+// Deploy only after Firebase Auth enrollment and emulator verification.
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return signedIn() && request.auth.token.admin == true;
+    }
+
+    function hasPermission(permission) {
+      return isAdmin() || (signedIn() && request.auth.token.permissions != null && request.auth.token.permissions.hasAny([permission]));
+    }
+
+    function canAccessCompany(companyId) {
+      return isAdmin() || (signedIn() && companyId != null && request.auth.token.companyIds != null && request.auth.token.companyIds.hasAny([companyId]));
+    }
+
+    match /users/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /logs/{logId} {
+      allow read: if isAdmin();
+      allow create: if hasPermission('audit.write')
+        && request.resource.data.actorUid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    match /workspaces/main {
+      // This document contains both companies and must not be exposed to a
+      // user whose company scope is enforced by document-level rules.
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    match /projects/{projectId} {
+      allow read: if canAccessCompany(resource.data.company);
+      allow create: if hasPermission('projects.write') && canAccessCompany(request.resource.data.company);
+      allow update: if hasPermission('projects.write') && canAccessCompany(resource.data.company) && canAccessCompany(request.resource.data.company);
+      allow delete: if hasPermission('projects.delete') && canAccessCompany(resource.data.company);
+    }
+
+    // Reserved normalized transaction paths. Keep these separate from the
+    // legacy embedded workspace until a verified migration is approved.
+    match /projects/{projectId}/{recordType}/{recordId} {
+      allow read: if canAccessCompany(get(/databases/$(database)/documents/projects/$(projectId)).data.company);
+      allow create, update: if hasPermission('records.write') && canAccessCompany(get(/databases/$(database)/documents/projects/$(projectId)).data.company);
+      allow delete: if hasPermission('records.delete') && canAccessCompany(get(/databases/$(database)/documents/projects/$(projectId)).data.company);
+    }
+
+    match /settings/{settingId} {
+      allow read: if signedIn();
+      allow write: if hasPermission('settings.write');
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -5,6 +5,14 @@
       "firebase.json",
       ".firebaserc",
       "firestore.rules",
+      "firestore.rules.migration-draft",
+      "SECURITY_MIGRATION.md",
+      "AUDIT_REPORT.md",
+      "tests/**",
+      "tools/**",
+      "normalized-migration-manifest.json",
+      "package*.json",
+      "firebase.emulator.json",
       "**/.*",
       "**/node_modules/**"
     ],
@@ -16,6 +24,7 @@
     ]
   },
   "firestore": {
-    "rules": "firestore.rules"
+    "rules": "firestore.rules",
+    "predeploy": ["node tools/firestore-deploy-guard.js"]
   }
 }
