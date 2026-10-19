@@ -97,6 +97,7 @@ The application currently uses Firestore, not Realtime Database.
 - Added a header sync-state indicator for connection, save, synced, and offline states without adding a Firebase listener.
 - Added authenticated actor and company/project context to new activity logs; the migration rules draft now binds new log writes to the Firebase Auth UID.
 - Added a tested, non-destructive normalized migration planner for exported workspace JSON; it preserves orphaned records for review and does not access or modify Firebase.
+- Extended the migration manifest to preserve General Expenses, Messages, deletion requests, categories, and log-retention settings, with contract coverage for those records.
 - Documented the offline migration review workflow in `tools/README.md`, including backup verification and emulator/rollback gates.
 - Added document fingerprints to skip unchanged mirrored project, user, and log writes.
 - Added top-level workspace field fingerprints so autosave sends only changed workspace fields and no longer persists `activeUser` login state to the shared document.
@@ -105,6 +106,7 @@ The application currently uses Firestore, not Realtime Database.
 - Added Firebase password-reset email support for users with enrolled email addresses.
 - Added guarded first-login Firebase Auth enrollment for users with an email, without creating accounts from a stored password alone.
 - Added Firebase Auth session restoration on refresh, with enrolled accounts matched by UID/email and legacy browser restoration limited to unenrolled users.
+- Explicitly configured Firebase Auth browser-local persistence and corrected the initial workspace restore path so a remembered account renders the application after refresh or browser restart.
 - Excluded migration notes, draft rules, tests, and package metadata from Firebase Hosting so they are not publicly served from the app root.
 - Disabled the insecure full-workspace `localStorage` cache; Firestore persistent cache remains the application cache, while the browser-login preference and UI preferences remain separate.
 - Added a compatibility helper initialization fix for `addDays`, `purchaseItem`, and `itemPoQty`.
@@ -131,6 +133,7 @@ The migration draft now treats the legacy all-company workspace as admin-only an
 - `git diff --check` passes; only line-ending warnings are present.
 - Hosting-only deploy completed successfully for `kindrich-8e2bd`.
 - No production Firestore data was modified by the audit work.
+- The pre-migration backup was re-verified at `C:\Users\garry\Desktop\kindrich_web_stage1_backup_20261019`: 9 files, 700,347 bytes, including `index.html` and `firestore.rules`.
 - `npm test` and `npm run test:rules` pass. The rules test runs in the Firestore Emulator using Firebase CLI 13.35.1 and Java 17 on dedicated local port 8090; no production rules were contacted.
 
 ## Next Safe Implementation Stage

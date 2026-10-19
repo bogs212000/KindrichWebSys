@@ -7,6 +7,7 @@ const PROJECT_RECORD_TYPES = [
   'items', 'purchases', 'manpower', 'manpowerApprovals', 'expenses',
   'forwarded', 'canvassing', 'vouchering', 'payed', 'purchaseRequests'
 ];
+const GLOBAL_RECORD_TYPES = ['generatedExpenses', 'deleteRequests', 'messages'];
 
 function rows(value) {
   return Array.isArray(value) ? value.filter(row => row && typeof row === 'object') : [];
@@ -18,7 +19,7 @@ function validateWorkspace(workspace) {
   const projectIds = new Set(projects.map(project => project.id).filter(Boolean));
   const issues = [];
 
-  for (const collection of ['projects', ...PROJECT_RECORD_TYPES, 'users', 'roles', 'logs']) {
+  for (const collection of ['projects', ...PROJECT_RECORD_TYPES, ...GLOBAL_RECORD_TYPES, 'users', 'roles', 'logs']) {
     const collectionRows = rows(source[collection]);
     const seen = new Set();
     let duplicateIds = 0;
@@ -33,7 +34,7 @@ function validateWorkspace(workspace) {
         seen.add(row.id);
       }
       const projectId = row.project ?? row.projectId;
-      if (PROJECT_RECORD_TYPES.includes(collection) && projectId && !projectIds.has(projectId)) {
+      if ([...PROJECT_RECORD_TYPES, ...GLOBAL_RECORD_TYPES].includes(collection) && projectId && !projectIds.has(projectId)) {
         orphanedProjects += 1;
       }
     }
@@ -80,14 +81,20 @@ function normalizeWorkspace(workspace) {
     }
   }
 
+  const globalRecords = Object.fromEntries(GLOBAL_RECORD_TYPES.map(type => [type, rows(source[type]).map(record => ({...record}))]));
+  const categories = [...new Set((Array.isArray(source.categories) ? source.categories : []).map(category => String(category)).filter(Boolean))].sort();
+
   return {
     format: 'kindrich-normalized-migration-manifest',
-    version: 1,
+    version: 2,
     generatedAt: new Date().toISOString(),
     source: 'workspace export; no Firebase writes performed',
     validation,
     projects,
     unassignedRecords,
+    globalRecords,
+    categories,
+    settings: {logAutoDelete: source.logAutoDelete !== false},
     users: rows(source.users).map(withoutPassword),
     roles: rows(source.roles).map(role => ({...role})),
     logs: rows(source.logs).map(log => ({...log})),
@@ -95,6 +102,8 @@ function normalizeWorkspace(workspace) {
       projects: projects.length,
       projectRecords: Object.fromEntries(PROJECT_RECORD_TYPES.map(type => [type, projects.reduce((total, project) => total + project.records[type].length, 0)])),
       unassignedRecords: unassignedRecords.length,
+      globalRecords: Object.fromEntries(GLOBAL_RECORD_TYPES.map(type => [type, globalRecords[type].length])),
+      categories: categories.length,
       users: rows(source.users).length,
       roles: rows(source.roles).length,
       logs: rows(source.logs).length
@@ -116,4 +125,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = {PROJECT_RECORD_TYPES, validateWorkspace, normalizeWorkspace};
+module.exports = {PROJECT_RECORD_TYPES, GLOBAL_RECORD_TYPES, validateWorkspace, normalizeWorkspace};

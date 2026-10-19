@@ -24,11 +24,13 @@
 - Configuration shows Admin-only Firebase Auth enrollment status for each user without exposing passwords.
 - Configuration includes a read-only integrity check for duplicate IDs, missing IDs, orphaned project references, and missing project company assignments before migration.
 - Added `tools/normalized-migration.js`, a review-only converter for workspace JSON exports. It preserves record IDs, keeps invalid/orphaned records in `unassignedRecords`, reports validation issues, removes passwords from the manifest, and performs no Firebase writes.
+- The review-only manifest also preserves company-level General Expenses, Messages, deletion requests, categories, and log-retention settings.
 - Localhost-only Firestore usage diagnostics expose application-side read, returned-document, write, listener, failure, and duration estimates without writing diagnostics to Firestore.
 - The header now shows connection/sync state (`Connecting`, `Saving`, `Synced`, or `Offline`) using the existing listener and save hooks; it does not create additional Firebase operations.
 - New activity logs include stable `actorUid`, local `userId`, `companyId`, and `projectId` context. Existing logs remain readable; the draft rules require `actorUid` to match the authenticated Firebase user for new log writes.
 - Users with an enrollment email can self-enroll on first login: the typed legacy password is checked against the existing record before Firebase Auth account creation, then the local plaintext password is removed after success.
 - Firebase Auth state is restored on refresh by matching the authenticated UID or email to the configured user; enrolled users are not trusted solely from a browser-local login marker.
+- Firebase Auth now explicitly uses `browserLocalPersistence`; the legacy remembered-user marker is restored only for unenrolled compatibility accounts, and logout clears it.
 - Full workspace data is no longer retained in the application `localStorage` cache; Firestore remains the authoritative backend and persistent client cache.
 - A Firebase Firestore predeploy guard now blocks accidental rules deployment while the legacy public rules remain active.
 

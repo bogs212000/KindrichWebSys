@@ -8,6 +8,7 @@ const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const rules = fs.readFileSync(path.join(root, 'firestore.rules'), 'utf8');
 const migrationRules = fs.readFileSync(path.join(root, 'firestore.rules.migration-draft'), 'utf8');
 const deployGuard = fs.readFileSync(path.join(root, 'tools/firestore-deploy-guard.js'), 'utf8');
+const checkpointVerifier = fs.readFileSync(path.join(root, 'tools/verify-checkpoint.js'), 'utf8');
 const firebaseConfig = JSON.parse(fs.readFileSync(path.join(root, 'firebase.json'), 'utf8').replace(/^\uFEFF/, ''));
 
 assert.match(html, /firebaseAuth/);
@@ -34,6 +35,8 @@ assert.match(html, /destroyAllCharts/);
 assert.match(html, /General Expenses Trend/);
 assert.match(html, /generalExpensesChartInstance/);
 assert.match(html, /data\.values\.kindrich/);
+assert.match(html, /selectLatestGeneralExpensePeriod/);
+assert.match(html, /createGeneralExpensesChartHost/);
 assert.match(html, /No general expenses are available for the selected period/);
 assert.match(html, /getFirestoreDiagnostics/);
 assert.match(html, /Firestore Usage Diagnostics/);
@@ -56,6 +59,7 @@ assert.match(rules, /allow read, write: if true/);
 assert.match(migrationRules, /request\.auth != null/);
 assert.match(migrationRules, /function canAccessCompany/);
 assert.match(deployGuard, /Firestore deploy blocked/);
+assert.match(checkpointVerifier, /Checkpoint verified/);
 assert.match(firebaseConfig.firestore.predeploy.join(' '), /firestore-deploy-guard\.js/);
 assert.match(migrationRules, /allow read: if isAdmin\(\);/);
 assert.match(migrationRules, /records\.write/);
@@ -63,7 +67,17 @@ for (const ignored of ['firestore.rules.migration-draft', 'SECURITY_MIGRATION.md
   assert.ok(firebaseConfig.hosting.ignore.includes(ignored), `Hosting must ignore ${ignored}`);
 }
 assert.ok(firebaseConfig.hosting.ignore.includes('firebase.emulator.json'));
+assert.ok(firebaseConfig.hosting.ignore.includes('.git/**'));
+assert.ok(firebaseConfig.hosting.ignore.includes('.firebase/**'));
 
 const scriptPattern = /<script([^>]*)>([\s\S]*?)<\/script>/gi;
 let match;
-let parse
+let parsed = 0;
+while ((match = scriptPattern.exec(html))) {
+  if (/type=["']module/i.test(match[1])) continue;
+  new vm.Script(match[2], { filename: 'index.html' });
+  parsed += 1;
+}
+
+assert.ok(parsed >= 20, 'expected the application script blocks to be present');
+console.log(`KINDRICH smoke checks passed (${parsed} classic script blocks parsed).`);

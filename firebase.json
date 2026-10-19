@@ -13,6 +13,9 @@
       "normalized-migration-manifest.json",
       "package*.json",
       "firebase.emulator.json",
+      ".git/**",
+      ".firebase/**",
+      "kindrich_web.code-workspace",
       "**/.*",
       "**/node_modules/**"
     ],

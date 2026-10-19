@@ -2,7 +2,8 @@
   "scripts": {
     "test": "node tests/smoke.js && node tests/migration-contract.js",
     "test:rules": "npx --yes firebase-tools@13.35.1 emulators:exec --config firebase.emulator.json --only firestore \"node tests/rules-http-smoke.js\"",
-    "security:firestore-deploy-check": "node tools/firestore-deploy-guard.js"
+    "security:firestore-deploy-check": "node tools/firestore-deploy-guard.js",
+    "audit:verify-checkpoint": "node tools/verify-checkpoint.js"
   },
   "dependencies": {
     "bootstrap-icons": "^1.13.2"
