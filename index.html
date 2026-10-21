@@ -93,7 +93,7 @@ function downloadItemTemplate(){let rows=[['Materials/item description','qty','C
 function downloadPurchaseTemplate(){let rows=[['Date','Items / Materials Description','Qty','Cost per Qty','Total'],...linked('items',projectId).map(x=>['',x.description,'','',''])];if(window.XLSX){let ws=XLSX.utils.aoa_to_sheet(rows),wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Purchases');XLSX.writeFile(wb,'kindrich_purchase_items.xlsx')}else{download('kindrich_purchase_items.csv',rows.map(r=>r.map(x=>'\"'+String(x).replace(/\"/g,'\"\"')+'\"').join(',')).join('\r\n'),'text/csv')}}
 function importPurchaseDate(value){let raw=String(value??'').trim();if(!raw)return todayLocal();if(/^\d+(\.\d+)?$/.test(raw)&&window.XLSX?.SSF){let parsed=XLSX.SSF.parse_date_code(Number(raw));if(parsed)return `${parsed.y}-${String(parsed.m).padStart(2,'0')}-${String(parsed.d).padStart(2,'0')}`}let date=new Date(raw);return isNaN(date)?todayLocal():localDate(date)}
 function normalizePurchaseImportRow(row){let description=String(rowValue(row,['Items / Materials Description','Item / Material','Materials/item description','Material/item description','Materials','Material','Item','Item Description','Description'])).trim(),item=linked('items',projectId).find(x=>String(x.description||'').trim().toLowerCase()===description.toLowerCase()),qty=num(rowValue(row,['Qty','Quantity','Purchase Qty'])),unitCost=num(rowValue(row,['Cost per Qty','Cost','Unit Cost','Unit Price','Purchase Unit Cost'])),amount=num(rowValue(row,['Total','Total Amount','Amount']))||qty*unitCost;if(!description||!item||qty<=0||unitCost<0||amount<=0)return null;return {id:uid(),project:projectId,itemId:item.id,description:item.description,unit:item.unit||'',date:importPurchaseDate(rowValue(row,['Date','Purchase Date'])),qty,unitCost,amount,remarks:''}}
-async function importPurchasesFile(file){if(!file)return;try{let rows=[],name=file.name.toLowerCase();if(name.endsWith('.csv'))rows=parseCsv(await file.text());else{if(!window.XLSX){alert('Excel parser is still loading. Please try again.');return}let buffer=await file.arrayBuffer(),wb=XLSX.read(buffer,{type:'array'}),sheet=wb.Sheets[wb.SheetNames[0]];rows=XLSX.utils.sheet_to_json(sheet,{defval:''})}let imported=rows.map(normalizePurchaseImportRow).filter(Boolean);if(!imported.length){alert('No valid purchase rows found. Use an exported purchase format and fill Date, Qty, Cost per Qty, and Total. Item descriptions must match this project.');return}let next=Number(nextPurchaseNo(projectId))||1;imported.forEach(x=>{x.purchaseNo=String(next++).padStart(5,'0')});db.purchases.push(...imported);writeLog('Add','Purchase Import',imported.length+' purchase record(s) uploaded');save()}catch(err){alert('Purchase import failed: '+err.message)}finally{let input=document.getElementById('purchaseImportFile');if(input)input.value=''}}
+async function importPurchasesFile(file){if(!file)return;try{let rows=[],name=file.name.toLowerCase();if(name.endsWith('.csv'))rows=parseCsv(await file.text());else{if(!window.XLSX){alert('Excel parser is still loading. Please try again.');return}let buffer=await file.arrayBuffer(),wb=XLSX.read(buffer,{type:'array'}),sheet=wb.Sheets[wb.SheetNames[0]];rows=XLSX.utils.sheet_to_json(sheet,{defval:''})}let imported=rows.map(normalizePurchaseImportRow).filter(Boolean);if(!imported.length){alert('No valid purchase rows found. Use an exported purchase format and fill Date, Qty, Cost per Qty, and Total. BOQ Item ID or item description must match this project.');return}let next=Number(nextPurchaseNo(projectId))||1;imported.forEach(x=>{x.purchaseNo=String(next++).padStart(5,'0')});db.purchases.push(...imported);writeLog('Add','Purchase Import',imported.length+' purchase record(s) uploaded');save()}catch(err){alert('Purchase import failed: '+err.message)}finally{let input=document.getElementById('purchaseImportFile');if(input)input.value=''}}
 function downloadExpenseTemplate(){let rows=[['Date','Voucher No. (Optional)','Description','Details/Remarks','Amount']];if(window.XLSX){let ws=XLSX.utils.aoa_to_sheet(rows),wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Other Expenses');XLSX.writeFile(wb,'kindrich_other_expenses.xlsx')}else{download('kindrich_other_expenses.csv',rows.map(r=>r.map(x=>'\"'+String(x).replace(/\"/g,'\"\"')+'\"').join(',')).join('\r\n'),'text/csv')}}
 function normalizeExpenseImportRow(row){let date=importPurchaseDate(rowValue(row,['Date','Expense Date'])),voucherNo=String(rowValue(row,['Voucher No.','Voucher No','Voucher Number','Voucher'])).trim(),description=String(rowValue(row,['Description','Expense Description'])).trim(),remarks=String(rowValue(row,['Details/Remarks','Details','Remarks','Remark','Notes'])).trim(),amount=num(rowValue(row,['Amount','Expense Amount','Total']));if(!description||amount<=0)return null;return {id:uid(),project:projectId,date,voucherNo,category:'Imported',description,amount,remarks}}
 async function importExpensesFile(file){if(!file)return;try{let rows=[],name=file.name.toLowerCase();if(name.endsWith('.csv'))rows=parseCsv(await file.text());else{if(!window.XLSX){alert('Excel parser is still loading. Please try again.');return}let buffer=await file.arrayBuffer(),wb=XLSX.read(buffer,{type:'array'}),sheet=wb.Sheets[wb.SheetNames[0]];rows=XLSX.utils.sheet_to_json(sheet,{defval:''})}let imported=rows.map(normalizeExpenseImportRow).filter(Boolean);if(!imported.length){alert('No valid expense rows found. Use the expense format and fill Description and Amount.');return}db.expenses.push(...imported);writeLog('Add','Other Expenses Import',imported.length+' expense record(s) uploaded');save()}catch(err){alert('Expense import failed: '+err.message)}finally{let input=document.getElementById('expenseImportFile');if(input)input.value=''}}
@@ -1949,14 +1949,15 @@ body.dark-mode .actual-profit-card strong.negative{color:#ff9aaa!important}
   }
   function openPurchaseBatchForm(){
     formType='purchasesBatch';editing=null;$('form').dataset.formType='purchasesBatch';$('form').querySelector('[type=submit]').style.display='';$('form').querySelector('[type=submit]').innerHTML='<i class="bi bi-check2"></i> Save Records';$('modal').querySelector('.dialog').classList.add('wide-dialog');$('modalTitle').textContent='Add Purchase Records';$('fields').innerHTML=`<div class="group"><label>Purchase Date</label><input class="field" type="date" name="purchaseDate" value="${todayLocal()}" required></div><div class="group wide"><label>Purchase Items</label><div class="purchase-batch-lines" data-purchase-lines>${purchaseBatchLine()}</div><button class="btn secondary" type="button" data-add-purchase-line><i class="bi bi-plus-lg"></i> Add Item</button></div>`;$('modal').classList.add('show');bindPurchaseBatchLines();}
-  openForm=function(type,id){if(type==='purchases'&&!id){openPurchaseBatchForm();return}$('form').removeAttribute('data-form-type');baseOpenFormWithPurchaseBatch(type,id)};
-  document.addEventListener('submit',event=>{
+  openForm=function(type,id){if(type==='purchases'&&!id){openPurchaseBatchForm();return}$('form').removeAttribute('data-form-type');$('modal').querySelector('.dialog').classList.remove('purchase-edit-dialog');baseOpenFormWithPurchaseBatch(type,id);if(type==='purchases'&&id)$('modal').querySelector('.dialog').classList.add('purchase-edit-dialog')};
+  window.flushWorkspaceToFirebase=async()=>{clearTimeout(saveTimer);while(saveInFlight)await new Promise(resolve=>setTimeout(resolve,50));await flushWorkspaceSave();while(saveInFlight)await new Promise(resolve=>setTimeout(resolve,50));};
+  document.addEventListener('submit',async event=>{
     const form=event.target;if(form?.dataset.formType!=='purchasesBatch')return;event.preventDefault();event.stopImmediatePropagation();
     const rows=[...form.querySelectorAll('[data-purchase-line]')],date=form.querySelector('[name="purchaseDate"]')?.value||todayLocal(),items=purchaseBatchItems();
     const records=rows.map(row=>{const item=items.find(x=>x.id===row.querySelector('[name="purchaseItemId"]')?.value),qty=num(row.querySelector('[name="purchaseQty"]')?.value),unitCost=num(row.querySelector('[name="purchaseCost"]')?.value);return {item,qty,unitCost,remarks:String(row.querySelector('[name="purchaseLineRemarks"]')?.value||'').trim()}});
     if(!records.length||records.some(record=>!record.item||record.qty<=0||record.unitCost<0)){notifySuccess('Add a valid item, quantity, and cost for every purchase line.');return}
     let next=Number(nextPurchaseNo(projectId));records.forEach(({item,qty,unitCost,remarks},index)=>db.purchases.push({id:uid(),project:projectId,itemId:item.id,item:item.description,description:item.description,unit:item.unit||'',purchaseNo:String(next+index).padStart(5,'0'),date,qty,unitCost,amount:qty*unitCost,remarks}));
-    writeLog('Add','Purchase',`${records.length} purchase record${records.length===1?'':'s'}`);close();save();
+    writeLog('Add','Purchase',`${records.length} purchase record${records.length===1?'':'s'}`);$('modal').classList.remove('show');save();await window.flushWorkspaceToFirebase();if(typeof window.refreshPurchaseTable==='function')await window.refreshPurchaseTable();
   },true);
   const purchaseBatchStyle=document.createElement('style');purchaseBatchStyle.textContent='.purchase-batch-lines{display:grid;gap:8px;margin:8px 0 12px}.purchase-batch-line{display:grid;grid-template-columns:minmax(190px,2fr) .75fr 1fr 1fr minmax(150px,1.4fr) 28px;gap:7px;align-items:end;padding:8px;border:1px solid var(--line);border-radius:6px;background:var(--panel)}.purchase-batch-line .mini{min-width:0}.purchase-batch-line label{display:block;font-size:11px;color:var(--muted);margin-bottom:3px}.purchase-batch-line .field{width:100%;min-width:0}.purchase-batch-line .remove-purchase-line{width:26px;height:26px;padding:2px}@media(max-width:760px){.purchase-batch-line{grid-template-columns:1fr 1fr}.purchase-batch-line .mini:first-child,.purchase-batch-line .mini:nth-child(5){grid-column:1/-1}.purchase-batch-line .remove-purchase-line{grid-column:2;justify-self:end}}';document.head.appendChild(purchaseBatchStyle);
 })();
@@ -1986,6 +1987,73 @@ body.dark-mode .actual-profit-card strong.negative{color:#ff9aaa!important}
   configuration=function(){baseConfigurationWithLayout();let content=document.getElementById('content'),logs=[...content.querySelectorAll('.panel')].find(panel=>panel.querySelector('h3')?.textContent.trim()==='Activity Logs');if(logs)content.appendChild(logs)};
 })();
 </script>
+<script>
+(function(){
+  const baseDetailWithoutManpowerFooter=detail;
+  detail=function(){baseDetailWithoutManpowerFooter();document.querySelectorAll('.budget-footer > div').forEach(card=>{if(card.querySelector('label')?.textContent.trim()==='Manpower Budget')card.remove()});let p=project(),t=p?totals(p):null,manpowerCard=[...document.querySelectorAll('.detail-summary .card')].find(card=>card.querySelector('label')?.textContent.trim()==='Manpower Expenses');if(p&&t&&manpowerCard){let budget=num(p.manpowerBudget)||num(t.materials)*.4,note=manpowerCard.querySelector('small');if(note)note.textContent=(budget-num(t.labor)>=0?'Remaining budget: ':'Over budget: ')+money(Math.abs(budget-num(t.labor)))}};
+})();
+</script>
+<script>
+(function(){
+  const viewStateKey='kindrich_current_view_v1';let viewStateRestored=false;
+  function restoreViewState(){if(viewStateRestored)return;viewStateRestored=true;try{let saved=JSON.parse(localStorage.getItem(viewStateKey)||'null');if(!saved||typeof saved!=='object')return;if(['dashboard','projects','detail','approval','vouchering','configuration','confirmation','messages','generatedExpenses','reports'].includes(saved.page))page=saved.page;if(typeof saved.projectId==='string'&&saved.projectId)projectId=saved.projectId;if(typeof saved.tab==='string'&&saved.tab)tab=saved.tab;if(typeof saved.company==='string'&&saved.company)company=saved.company;if(typeof saved.tableExpanded==='boolean')tableExpanded=saved.tableExpanded}catch(error){localStorage.removeItem(viewStateKey)}}
+  function saveViewState(){localStorage.setItem(viewStateKey,JSON.stringify({page,projectId,tab,company,tableExpanded}))}
+  const baseRenderWithViewState=render;
+  render=function(){restoreViewState();saveViewState();baseRenderWithViewState();saveViewState()};
+})();
+</script>
+<script>
+(function(){
+  async function refreshCurrentTables(){
+    const state={page,projectId,tab,company,tableExpanded};
+    document.querySelectorAll('[data-universal-table-refresh]').forEach(button=>{button.disabled=true;button.classList.add('is-loading')});
+    try{
+      if(window.firebaseWorkspaceReady&&typeof getDoc==='function'&&typeof doc==='function'&&typeof trackedRead==='function'){
+        const snapshot=await trackedRead('workspace:table-refresh',()=>getDoc(workspaceRef));
+        if(snapshot.exists())await applyWorkspaceSnapshot(snapshot);
+      }
+      page=state.page;projectId=state.projectId;tab=state.tab;company=state.company;tableExpanded=state.tableExpanded;render();
+    }catch(error){console.warn('Table refresh failed',error);notifySuccess('Unable to refresh table data from Firebase.')}finally{document.querySelectorAll('[data-universal-table-refresh]').forEach(button=>{button.disabled=false;button.classList.remove('is-loading')})}
+  }
+  const baseRenderWithUniversalTableRefresh=render;
+  render=function(){baseRenderWithUniversalTableRefresh();document.querySelectorAll('#content .scroll').forEach(scroll=>{if(tab==='purchases'&&document.getElementById('refreshPurchaseTable'))return;let button=document.createElement('button');button.type='button';button.className='btn secondary kindrich-table-refresh';button.dataset.universalTableRefresh='';button.title='Refresh table from Firebase';button.innerHTML='<i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Refresh Table';button.onclick=refreshCurrentTables;scroll.insertAdjacentElement('beforebegin',button)})};
+  const style=document.createElement('style');style.textContent='.kindrich-table-refresh{display:inline-flex;align-items:center;gap:5px;margin:0 0 6px;padding:5px 8px;font-size:11px}.kindrich-table-refresh.is-loading{opacity:.6;cursor:wait}.kindrich-table-refresh .bi{font-size:12px}';document.head.appendChild(style);
+})();
+</script>
+<script>
+(function(){
+  const baseBindPurchaseToolsWithRefresh=bindPurchaseTools;
+  async function refreshPurchaseTable(){
+    const button=document.getElementById('refreshPurchaseTable'),recordsEl=document.getElementById('records');if(!recordsEl)return;
+    if(button){button.disabled=true;button.classList.add('is-loading');button.title='Refreshing purchases from Firebase'}
+    try{
+      if(window.firebaseWorkspaceReady&&typeof getDoc==='function'&&typeof doc==='function'&&typeof trackedRead==='function'){
+        const snapshot=await trackedRead('projects/'+projectId+':purchases:refresh',()=>getDoc(doc(firestore,'projects',projectId)));
+        if(snapshot.exists()){
+          const fresh=Array.isArray(snapshot.data()?.purchases)?snapshot.data().purchases.filter(row=>row&&row.id):null;
+          if(fresh){db.purchases=(db.purchases||[]).filter(row=>row.project!==projectId).concat(fresh.map(row=>({...row,project:row.project||projectId})))}
+        }
+      }
+      const query=document.getElementById('purchaseSearch')?.value.trim().toLowerCase()||'',rows=linked('purchases',projectId).filter(row=>{if(!query)return true;let item=purchaseItem(row);return [item.description,row.description,row.purchaseNo,row.date,item.unit,row.unit].some(value=>String(value||'').toLowerCase().includes(query))});recordsEl.innerHTML=recordTable(rows);bindActions();bindPurchaseBulk(rows);
+    }catch(error){console.warn('Purchase table refresh failed',error);notifySuccess('Unable to refresh purchases from Firebase.')}finally{if(button){button.disabled=false;button.classList.remove('is-loading');button.title='Refresh purchase table'}}
+  }
+  window.refreshPurchaseTable=refreshPurchaseTable;
+  bindPurchaseTools=function(){baseBindPurchaseToolsWithRefresh();if(tab!=='purchases')return;let addButton=document.getElementById('addRow'),bar=addButton?.parentElement;if(!bar||document.getElementById('refreshPurchaseTable'))return;bar.insertAdjacentHTML('afterbegin','<button class="btn secondary" id="refreshPurchaseTable" type="button" title="Refresh purchase table"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Refresh Table</button>');document.getElementById('refreshPurchaseTable').onclick=refreshPurchaseTable};
+  const style=document.createElement('style');style.textContent='#refreshPurchaseTable.is-loading{opacity:.65;cursor:wait}';document.head.appendChild(style);
+})();
+</script>
+<script>
+(function(){
+  const baseBindPurchaseToolsWithDownload=bindPurchaseTools;
+  bindPurchaseTools=function(){baseBindPurchaseToolsWithDownload();if(tab!=='purchases')return;let addButton=document.getElementById('addRow'),bar=addButton?.parentElement;if(!bar||document.getElementById('downloadPurchaseFormat'))return;bar.insertAdjacentHTML('afterbegin','<button class="btn secondary" id="downloadPurchaseFormat" type="button" title="Download purchase Excel format"><i class="bi bi-download" aria-hidden="true"></i> Download Purchase Format</button>');document.getElementById('downloadPurchaseFormat').onclick=downloadPurchaseTemplate};
+})();
+</script>
+<script>
+(function(){
+  downloadPurchaseTemplate=function(){let rows=[['Date','BOQ Item ID','Items / Materials Description','Unit','Qty','Cost per Qty','Total'],...linked('items',projectId).map(item=>['',item.id,item.description,item.unit||'','','',''])];if(window.XLSX){let ws=XLSX.utils.aoa_to_sheet(rows),wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Purchases');XLSX.writeFile(wb,'kindrich_purchase_items.xlsx')}else download('kindrich_purchase_items.csv',rows.map(row=>row.map(value=>'"'+String(value).replace(/"/g,'""')+'"').join(',')).join('\r\n'),'text/csv')};
+  normalizePurchaseImportRow=function(row){let itemId=String(rowValue(row,['BOQ Item ID','Item ID','Item Id'])).trim(),description=String(rowValue(row,['Items / Materials Description','Item / Material','Materials/item description','Material/item description','Materials','Material','Item','Item Description','Description'])).trim(),items=linked('items',projectId),item=items.find(value=>value.id===itemId)||items.find(value=>String(value.description||'').trim().toLowerCase()===description.toLowerCase()),qty=num(rowValue(row,['Qty','Quantity','Purchase Qty'])),unitCost=num(rowValue(row,['Cost per Qty','Cost','Unit Cost','Unit Price','Purchase Unit Cost'])),amount=num(rowValue(row,['Total','Total Amount','Amount']))||qty*unitCost;if(!item||qty<=0||unitCost<0||amount<=0)return null;return {id:uid(),project:projectId,itemId:item.id,description:item.description,unit:String(rowValue(row,['Unit','UOM'])||item.unit||'').trim(),date:importPurchaseDate(rowValue(row,['Date','Purchase Date'])),qty,unitCost,amount,remarks:''}};
+})();
+</script>
 <style>
 .payed-summary-removed{display:none}
 .config-layout #userCompanyAccessPanel{grid-column:1/-1}
@@ -1998,6 +2066,11 @@ body.dark-mode .actual-profit-card strong.negative{color:#ff9aaa!important}
 .purchase-batch-line .mini{min-width:0;overflow:hidden}
 .purchase-batch-line input,.purchase-batch-line select{min-width:0;max-width:100%;width:100%;box-sizing:border-box}
 @media(max-width:900px){.purchase-batch-line{grid-template-columns:1fr 1fr}.purchase-batch-line .mini:first-child,.purchase-batch-line .mini:nth-child(5){grid-column:1/-1}.purchase-batch-line .remove-purchase-line{grid-column:2;justify-self:end}}
+.purchase-edit-dialog{width:min(760px,100%)!important}
+.purchase-edit-dialog #fields{grid-template-columns:repeat(2,minmax(0,1fr));min-width:0}
+.purchase-edit-dialog #fields .group{min-width:0}
+.purchase-edit-dialog #fields .field{width:100%;max-width:100%;min-width:0;box-sizing:border-box}
+@media(max-width:760px){.purchase-edit-dialog #fields{grid-template-columns:1fr}}
 </style>
 </body>
 </html>
