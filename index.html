@@ -1759,14 +1759,14 @@ body.dark-mode .actual-profit-card strong.negative{color:#ff9aaa!important}
   db.roles.forEach(role=>{if(Array.isArray(role.tabs)&&!role.tabs.includes('delivery'))role.tabs.push('delivery')});
   const baseApplyDeliveryWorkspace=applyFirebaseWorkspace;
   applyFirebaseWorkspace=function(value){baseApplyDeliveryWorkspace(value);if(!Array.isArray(db.deliveries))db.deliveries=[];db.roles.forEach(role=>{if(Array.isArray(role.tabs)&&!role.tabs.includes('delivery'))role.tabs.push('delivery')})};
-  const deliveryLine=(line={})=>{let items=linked('items',projectId),selected=line.itemId||'',options=['<option value="">Select uploaded item</option>',...items.map(item=>`<option value="${esc(item.id)}" ${selected===item.id?'selected':''}>${esc(item.description)} (${esc(item.unit||'')})</option>`),'<option value="__manual__">Manual item</option>'].join('');return `<div class="canvass-line delivery-line" data-delivery-line><div class="mini"><label>Uploaded Item</label><select class="field" name="deliveryItemId">${options}</select></div><div class="mini"><label>Item / Material</label><input class="field" name="deliveryItem" value="${esc(line.item||'')}" required><small class="sub delivery-conversion-note" data-delivery-conversion></small></div><div class="mini"><label>Qty</label><input class="field" name="deliveryQty" type="number" min="0" step="any" value="${num(line.qty)||''}" required></div><div class="mini"><label>Unit</label><input class="field" name="deliveryUnit" value="${esc(line.unit||'')}"></div><div class="mini"><label>Remarks</label><input class="field" name="deliveryLineRemarks" value="${esc(line.remarks||'')}"></div><button type="button" class="btn danger" style="padding:8px" data-remove-delivery-line>Remove</button></div>`};
-  function openDeliveryForm(id=null){formType='delivery';editing=id;let existing=id?db.deliveries.find(item=>item.id===id):{},lines=Array.isArray(existing.lines)&&existing.lines.length?existing.lines:[{}];$('modal').querySelector('.dialog').classList.remove('wide-dialog');$('modalTitle').textContent=(id?'Edit ':'Add ')+'Delivery';$('fields').innerHTML=`<div class="group"><label>Date</label><input class="field" name="deliveryDate" type="date" value="${esc(existing.date||todayLocal())}" required></div><div class="group"><label>Delivery No. (Optional)</label><input class="field" name="deliveryNo" value="${esc(existing.deliveryNo||'')}"></div><div class="group wide"><label>Delivered By</label><input class="field" name="deliverySupplier" value="${esc(existing.supplier||'')}"></div><div class="group wide"><label>Items Delivered</label><div id="deliveryLines">${lines.map(deliveryLine).join('')}</div><button type="button" class="btn secondary" id="addDeliveryLine">+ Add Item</button><p class="sub" style="margin:6px 0 0">Select an uploaded BOQ item, or choose Manual item for materials not in the uploaded list.</p></div><div class="group wide"><label>Delivery Remarks</label><textarea class="field" name="deliveryRemarks" rows="3">${esc(existing.remarks||'')}</textarea></div>`;$('modal').classList.add('show');bindDeliveryFields()}
-  function bindDeliveryFields(){let box=document.getElementById('deliveryLines');if(!box)return;let sync=(row,fillQty=false)=>{let select=row.querySelector('[name="deliveryItemId"]'),item=row.querySelector('[name="deliveryItem"]'),unit=row.querySelector('[name="deliveryUnit"]'),qty=row.querySelector('[name="deliveryQty"]'),note=row.querySelector('[data-delivery-conversion]'),selected=linked('items',projectId).find(x=>x.id===select.value);if(selected){item.value=selected.description||'';unit.value=selected.unit||selected.uom||selected.poUnit||'';if(fillQty||!num(qty.value))qty.value=num(selected.qty??selected.poQty)||''}if(note){let conversions=(db.itemConversions||[]).filter(record=>String(record.project)===String(projectId)&&record.sourceItemId===selected?.id);note.innerHTML=conversions.map(record=>record.conversionType==='cash'?'Conversion: Item to Cash · Cash Amount '+money(record.conversionAmount)+' · Adjustment '+money(Math.max(0,num(record.sourceValue)-num(record.entityAmount??record.conversionAmount))):'Conversion: Item to Item · '+esc(record.destinationDescription||'item')+' · Qty '+num(record.destinationQty)+' '+esc(record.destinationUnit||'')).join('<br>');note.style.display=conversions.length?'block':'none'}};box.onchange=e=>{let row=e.target.closest('[data-delivery-line]');if(row&&e.target.name==='deliveryItemId')sync(row,true)};box.onclick=e=>{if(e.target.matches('[data-remove-delivery-line]')){let rows=box.querySelectorAll('[data-delivery-line]');if(rows.length>1)e.target.closest('[data-delivery-line]').remove()}};document.getElementById('addDeliveryLine').onclick=()=>box.insertAdjacentHTML('beforeend',deliveryLine({}));box.querySelectorAll('[data-delivery-line]').forEach(row=>sync(row,false))}
-  document.head.insertAdjacentHTML('beforeend','<style>.delivery-conversion-note{display:block;margin-top:4px;color:#2878c8;font-size:10px;line-height:1.35}.dark-mode .delivery-conversion-note{color:#74d7ff}</style>');
+  const deliveryLine=(line={})=>{let items=linked('items',projectId),selected=line.itemId||'',options=['<option value="">Select uploaded item</option>',...items.map(item=>`<option value="${esc(item.id)}" ${selected===item.id?'selected':''}>${esc(item.description)} (${esc(item.unit||'')})</option>`),'<option value="__manual__">Manual item</option>'].join('');return `<div class="canvass-line delivery-line" data-delivery-line><div class="mini"><label>Uploaded Item</label><select class="field" name="deliveryItemId">${options}</select></div><div class="mini"><label>Item / Material</label><input class="field" name="deliveryItem" value="${esc(line.item||'')}" required><small class="sub delivery-conversion-note" data-delivery-conversion></small></div><div class="mini"><label>Qty Delivered</label><input class="field" name="deliveryQty" type="number" min="0" step="any" value="${num(line.qty)||''}" required></div><div class="mini"><label>Unit</label><input class="field" name="deliveryUnit" value="${esc(line.unit||'')}"></div><div class="mini"><label>Unit Cost (₱)</label><input class="field" name="deliveryUnitCost" type="number" min="0" step="any" value="${num(line.unitCost)||''}" required></div><div class="mini"><label>Total Amount (₱)</label><input class="field" name="deliveryAmount" type="number" min="0" step="any" value="${num(line.amount)||''}" readonly></div><div class="mini"><label>Remarks</label><input class="field" name="deliveryLineRemarks" value="${esc(line.remarks||'')}"></div><button type="button" class="btn danger" style="padding:8px" data-remove-delivery-line>Remove</button></div>`};
+  function openDeliveryForm(id=null){formType='delivery';editing=id;let existing=id?db.deliveries.find(item=>item.id===id):{},lines=Array.isArray(existing.lines)&&existing.lines.length?existing.lines:[{}];$('modal').querySelector('.dialog').classList.add('wide-dialog','delivery-dialog');$('modalTitle').textContent=(id?'Edit ':'Add ')+'Delivery';$('fields').innerHTML=`<div class="group"><label>Date</label><input class="field" name="deliveryDate" type="date" value="${esc(existing.date||todayLocal())}" required></div><div class="group"><label>Delivery No. (Optional)</label><input class="field" name="deliveryNo" value="${esc(existing.deliveryNo||'')}"></div><div class="group wide"><label>Delivered By</label><input class="field" name="deliverySupplier" value="${esc(existing.supplier||'')}"></div><div class="group wide"><label>Items Delivered</label><div id="deliveryLines">${lines.map(deliveryLine).join('')}</div><button type="button" class="btn secondary" id="addDeliveryLine">+ Add Item</button><p class="sub" style="margin:6px 0 0">Select an uploaded BOQ item, or choose Manual item for materials not in the uploaded list.</p></div><div class="group wide"><label>Delivery Remarks</label><textarea class="field" name="deliveryRemarks" rows="3">${esc(existing.remarks||'')}</textarea></div>`;$('modal').classList.add('show');bindDeliveryFields()}
+  function bindDeliveryFields(){let box=document.getElementById('deliveryLines');if(!box)return;let sync=(row,fillQty=false)=>{let select=row.querySelector('[name="deliveryItemId"]'),item=row.querySelector('[name="deliveryItem"]'),unit=row.querySelector('[name="deliveryUnit"]'),qty=row.querySelector('[name="deliveryQty"]'),unitCost=row.querySelector('[name="deliveryUnitCost"]'),amount=row.querySelector('[name="deliveryAmount"]'),note=row.querySelector('[data-delivery-conversion]'),selected=linked('items',projectId).find(x=>x.id===select.value);if(selected){item.value=selected.description||'';unit.value=selected.unit||selected.uom||selected.poUnit||'';if(fillQty||!num(qty.value))qty.value=num(selected.qty??selected.poQty)||'';if(fillQty||!num(unitCost.value))unitCost.value=num(itemPoMc(selected))||''}amount.value=(num(qty.value)*num(unitCost.value)).toFixed(2);if(note){let conversions=(db.itemConversions||[]).filter(record=>String(record.project)===String(projectId)&&record.sourceItemId===selected?.id);note.innerHTML=conversions.map(record=>record.conversionType==='cash'?'Conversion: Item to Cash · Cash Amount '+money(record.conversionAmount)+' · Adjustment '+money(Math.max(0,num(record.sourceValue)-num(record.entityAmount??record.conversionAmount))):'Conversion: Item to Item · '+esc(record.destinationDescription||'item')+' · Qty '+num(record.destinationQty)+' '+esc(record.destinationUnit||'')).join('<br>');note.style.display=conversions.length?'block':'none'}};box.onchange=e=>{let row=e.target.closest('[data-delivery-line]');if(row&&e.target.name==='deliveryItemId')sync(row,true)};box.oninput=e=>{let row=e.target.closest('[data-delivery-line]');if(row&&(e.target.name==='deliveryQty'||e.target.name==='deliveryUnitCost'))sync(row,false)};box.onclick=e=>{if(e.target.matches('[data-remove-delivery-line]')){let rows=box.querySelectorAll('[data-delivery-line]');if(rows.length>1)e.target.closest('[data-delivery-line]').remove()}};document.getElementById('addDeliveryLine').onclick=()=>box.insertAdjacentHTML('beforeend',deliveryLine({}));box.querySelectorAll('[data-delivery-line]').forEach(row=>sync(row,false))}
+  document.head.insertAdjacentHTML('beforeend','<style>.delivery-dialog{width:min(1200px,100%)!important}.delivery-line{grid-template-columns:2fr .8fr .8fr .8fr 1fr 1fr 1fr auto}.delivery-conversion-note{display:block;margin-top:4px;color:#2878c8;font-size:10px;line-height:1.35}.dark-mode .delivery-conversion-note{color:#74d7ff}@media(max-width:760px){.delivery-line{grid-template-columns:1fr 1fr}.delivery-line .mini:first-child,.delivery-line .mini:nth-child(2){grid-column:1/-1}}</style>');
   const baseOpenDeliveryForm=openForm;
   openForm=function(type,id=null){if(type==='delivery'){openDeliveryForm(id);return}baseOpenDeliveryForm(type,id)};
   const baseDeliverySubmit=$('form').onsubmit;
-  $('form').addEventListener('submit',e=>{if(formType!=='delivery')return;e.preventDefault();e.stopImmediatePropagation();let fd=new FormData(e.target),lines=[...document.querySelectorAll('[data-delivery-line]')].map(row=>({itemId:String(row.querySelector('[name="deliveryItemId"]')?.value||''),item:String(row.querySelector('[name="deliveryItem"]')?.value||'').trim(),qty:num(row.querySelector('[name="deliveryQty"]')?.value),unit:String(row.querySelector('[name="deliveryUnit"]')?.value||'').trim(),remarks:String(row.querySelector('[name="deliveryLineRemarks"]')?.value||'').trim()})).filter(line=>line.item&&line.qty>0);if(!lines.length){alert('Please add at least one delivered item with a quantity.');return}let record={id:editing||uid(),project:projectId,date:String(fd.get('deliveryDate')||todayLocal()),deliveryNo:String(fd.get('deliveryNo')||'').trim(),supplier:String(fd.get('deliverySupplier')||'').trim(),remarks:String(fd.get('deliveryRemarks')||'').trim(),lines};if(editing){let index=db.deliveries.findIndex(item=>item.id===editing);if(index>=0)db.deliveries[index]=record;writeLog('Update','Delivery',record.deliveryNo||record.date)}else{db.deliveries.push(record);writeLog('Add','Delivery',record.deliveryNo||record.date)}$('modal').classList.remove('show');save()},true);
+  $('form').addEventListener('submit',e=>{if(formType!=='delivery')return;e.preventDefault();e.stopImmediatePropagation();let fd=new FormData(e.target),lines=[...document.querySelectorAll('[data-delivery-line]')].map(row=>{let qty=num(row.querySelector('[name="deliveryQty"]')?.value),unitCost=num(row.querySelector('[name="deliveryUnitCost"]')?.value);return {itemId:String(row.querySelector('[name="deliveryItemId"]')?.value||''),item:String(row.querySelector('[name="deliveryItem"]')?.value||'').trim(),qty,unit:String(row.querySelector('[name="deliveryUnit"]')?.value||'').trim(),unitCost,amount:qty*unitCost,remarks:String(row.querySelector('[name="deliveryLineRemarks"]')?.value||'').trim()}}).filter(line=>line.item&&line.qty>0&&line.unitCost>=0);if(!lines.length){alert('Please add at least one delivered item with a quantity and unit cost.');return}let record={id:editing||uid(),project:projectId,date:String(fd.get('deliveryDate')||todayLocal()),deliveryNo:String(fd.get('deliveryNo')||'').trim(),supplier:String(fd.get('deliverySupplier')||'').trim(),remarks:String(fd.get('deliveryRemarks')||'').trim(),lines};if(editing){let index=db.deliveries.findIndex(item=>item.id===editing);if(index>=0)db.deliveries[index]=record;writeLog('Update','Delivery',record.deliveryNo||record.date)}else{db.deliveries.push(record);writeLog('Add','Delivery',record.deliveryNo||record.date)}$('modal').classList.remove('show');save()},true);
   const basePerformDeleteDelivery=performDelete;
   performDelete=function(type,id){let result=basePerformDeleteDelivery(type,id);if(result&&type==='project')db.deliveries=db.deliveries.filter(record=>record.project!==id);return result};
   const baseDetailWithDeliveries=detail;
@@ -2015,7 +2015,7 @@ body.dark-mode .actual-profit-card strong.negative{color:#ff9aaa!important}
     'Forward Out':'Sum of amounts forwarded out of this project.',
     'Tax Amount':'Tax formula: Project Budget ÷ 1.12 × 7%, when tax is included.',
     'Amount Payed':'Sum of payment records received for this project.',
-    'Remaining Budget':'Project Budget − Tax − Purchase Items − Manpower − Other Expenses − Forward In + Forward Out.',
+    'Remaining Budget':'Project Budget − Tax − Purchase Items − Manpower − Other Expenses − SOP − Retention Held − Item-to-Cash Amount − Forward In + Forward Out.',
     'Total SOP':'Sum of all SOP amounts for this project.'
   };
   detail=function(){baseDetailWithSummaryTooltips();document.querySelectorAll('.detail-summary .card').forEach(card=>{let label=card.querySelector('label')?.textContent.trim(),formula=formulas[label];if(!formula)return;card.title=formula;card.dataset.summaryTooltip=formula;card.setAttribute('aria-label',label+': '+formula)})};
@@ -2166,7 +2166,7 @@ body.dark-mode .actual-profit-card strong.negative{color:#ff9aaa!important}
     baseDetailWithConversions();if(tab!=='conversions')return;
     const records=document.getElementById('records'),rows=linked('itemConversions',projectId),bar=document.getElementById('expandTable')?.parentElement;
     document.getElementById('addRow')?.remove();
-    if(bar&&!document.getElementById('addItemConversion')){bar.insertAdjacentHTML('afterbegin','<button class="btn" id="addItemConversion" type="button"><i class="bi bi-arrow-left-right" aria-hidden="true"></i> Add Conversion</button>');document.getElementById('addItemConversion').onclick=()=>openItemConversionForm()}
+    if(bar&&!document.getElementById('addItemConversion')){bar.insertAdjacentHTML('afterbegin','<button class="btn" id="addItemConversion" type="button"><i class="bi bi-arrow-left-right" aria-hidden="true"></i> Add Conversion</button>');document.getElementById('addItemConversion').onclick=()=>openForm('itemConversions')}
     const cashTotal=rows.filter(row=>row.conversionType==='cash').reduce((sum,row)=>sum+num(row.conversionAmount),0),itemTotal=rows.filter(row=>row.conversionType==='item').reduce((sum,row)=>sum+num(row.conversionAmount),0);
     const summary=`<div class="conversion-summary"><div><span>Cash Converted</span><b>${money(cashTotal)}</b></div><div><span>Item-to-Item Value</span><b>${money(itemTotal)}</b></div><p>Conversion values are informational and excluded from project expense and BOQ purchase totals.</p></div>`;
     if(records)records.innerHTML=summary+table(['No.','Date','Type','Source BOQ Item','Source Qty','Destination','Converted Qty','Adjustment','Conversion Amount','Remarks','Actions'],rows.map((row,index)=>[index+1,esc(row.date||''),row.conversionType==='cash'?'Item to Cash':'Item to Item',esc(row.sourceDescription||''),num(row.sourceQty),esc(row.destinationDescription||'Cash'),row.conversionType==='item'?num(row.destinationQty):'—',row.conversionType==='cash'?num(row.adjustmentPercent)+'%':'—',`<b class="${row.conversionType==='cash'?'positive':''}">${money(row.conversionAmount)}</b>`,esc(row.remarks||''),buttons('itemConversions',row.id)]));bindActions();
@@ -2395,14 +2395,13 @@ body.dark-mode .actual-profit-card strong.negative{color:#ff9aaa!important}
     const summary=document.querySelector('.conversion-summary');
     if(!summary||summary.querySelector('[data-project-profit]'))return;
     const rows=linked('itemConversions',projectId).map(cashSplit),cashRows=rows.filter(row=>row.conversionType==='cash');
-    const entityTotal=cashRows.reduce((sum,row)=>sum+num(row.entityAmount??row.conversionAmount),0),profitTotal=cashRows.reduce((sum,row)=>sum+num(row.cashAdjustmentAmount),0);
+    const entityTotal=cashRows.reduce((sum,row)=>sum+num(row.entityAmount??row.conversionAmount),0);
     const firstLabel=summary.querySelector('div span');
     if(firstLabel)firstLabel.textContent='Cash to Entity';
     const firstValue=summary.querySelector('div b');
     if(firstValue)firstValue.textContent=money(entityTotal);
-    summary.insertAdjacentHTML('beforeend','<div data-project-profit><span>Project Profit</span><b class="positive">'+money(profitTotal)+'</b></div>');
     const note=summary.querySelector('p');
-    if(note)note.textContent='Cash to Entity is deducted from purchase totals. Cash Adjustment is recorded as project profit.';
+    if(note)note.textContent='Cash to Entity is deducted from the project remaining budget.';
   };
 })();
 </script>
@@ -2517,7 +2516,7 @@ body.dark-mode .actual-profit-card strong.negative{color:#ff9aaa!important}
     if(tab!=='delivery')return;
     const records=document.getElementById('records');if(!records)return;
     const rows=linked('deliveries',projectId);
-    records.innerHTML=table(['Date','Delivery No.','Delivered By','Items','Total Qty','Remarks','Actions'],rows.map(record=>{let lines=Array.isArray(record.lines)?record.lines:[],totalQty=lines.reduce((total,line)=>total+num(line.qty),0),items=lines.map(line=>`${esc(line.item)} (${num(line.qty)} ${esc(line.unit||'')})`).join('<br>');return [esc(record.date||''),esc(record.deliveryNo||''),esc(record.supplier||''),items,totalQty,esc(record.remarks||''),buttons('delivery',record.id)]}));
+    records.innerHTML=table(['Date','Delivery No.','Delivered By','Items','Total Qty','Unit Cost','Total Amount','Remarks','Actions'],rows.map(record=>{let lines=Array.isArray(record.lines)?record.lines:[],totalQty=lines.reduce((total,line)=>total+num(line.qty),0),totalAmount=lines.reduce((total,line)=>total+num(line.amount||num(line.qty)*num(line.unitCost)),0),unitCosts=[...new Set(lines.map(line=>num(line.unitCost)).filter(value=>value>0))],unitCost=unitCosts.length===1?unitCosts[0]:0,items=lines.map(line=>`${esc(line.item)} (${num(line.qty)} ${esc(line.unit||'')})`).join('<br>');return [esc(record.date||''),esc(record.deliveryNo||''),esc(record.supplier||''),items,totalQty,money(unitCost),money(totalAmount),esc(record.remarks||''),buttons('delivery',record.id)]}));
     bindActions();
   };
 })();
@@ -2546,9 +2545,9 @@ body.dark-mode .scroll table:has(th.item-col) td:nth-child(10) .pill.over{backgr
 (function(){
   itemRecordRows=function(rows){
     rows=(rows||[]).map(item=>{const conversions=(db.itemConversions||[]).filter(record=>String(record.project)===String(item.project||projectId)&&(record.sourceItemId===item.id||record.destinationItemId===item.id));if(!conversions.length)return item;const notes=conversions.map(record=>record.sourceItemId===item.id?(record.conversionType==='cash'?'Conversion: converted to cash '+money(record.conversionAmount)+' ('+num(record.adjustmentPercent)+'% adjustment)':'Conversion: converted to '+(record.destinationDescription||'item')+' '+num(record.destinationQty)+' '+(record.destinationUnit||'')):'Conversion: received from '+(record.sourceDescription||'item')+' '+num(record.sourceQty)+' '+(record.sourceUnit||'')).filter(Boolean);return {...item,remarks:[item.remarks,...notes].filter(Boolean).join(' | ')} }).filter(itemMatchesSearch);
-    const headers=['Item / Material','Qty','Unit Cost','Unit','Total Cost','Actual Qty Purchase','Amount Purchase','Remaining/Difference','Amount Difference','Status','Remarks','Actions'],groups={};
+    const consumerGoods=String(project()?.company||'').trim().toLowerCase()==='kindrich consumer goods trading',deliveries=consumerGoods?linked('deliveries',projectId):[],deliveredQty=item=>deliveries.reduce((total,delivery)=>total+(Array.isArray(delivery.lines)?delivery.lines:[]).filter(line=>String(line.itemId||'')===String(item.id||'')||String(line.item||'').trim().toLowerCase()===String(item.description||'').trim().toLowerCase()).reduce((sum,line)=>sum+num(line.qty),0),0),headers=consumerGoods?['Item / Material','Qty','Qty Delivered','Unit Cost','Unit','Total Cost','Actual Qty Purchase','Amount Purchase','Remaining/Difference','Amount Difference','Status','Remarks','Actions']:['Item / Material','Qty','Unit Cost','Unit','Total Cost','Actual Qty Purchase','Amount Purchase','Remaining/Difference','Amount Difference','Status','Remarks','Actions'],groups={};
     rows.forEach(item=>{let key=item.category||'Uncategorized';(groups[key]||(groups[key]=[])).push(item)});
-    return Object.keys(groups).flatMap(category=>[`<tr class="category-row"><td colspan="${headers.length+1}"><div class="toolbar" style="justify-content:space-between"><span>${esc(category)}</span><span class="toolbar"><button class="btn secondary" style="padding:5px 8px;text-transform:none;letter-spacing:0;min-width:30px" title="Move category up" aria-label="Move category up" data-move-category="${esc(category)}|up">▲</button><button class="btn secondary" style="padding:5px 8px;text-transform:none;letter-spacing:0;min-width:30px" title="Move category down" aria-label="Move category down" data-move-category="${esc(category)}|down">▼</button><button class="btn secondary" style="padding:5px 8px;text-transform:none;letter-spacing:0" data-edit-category="${esc(category)}">Edit Category</button></span></div></td></tr>`,...groups[category].map(item=>{let qty=itemPoQty(item),unitCost=itemPoMc(item),actualQty=itemPurchasedQty(item),actualAmount=itemPurchasedAmount(item),plannedTotal=qty*unitCost,qtyDiff=actualQty-qty,amountDiff=actualAmount-plannedTotal,over=qtyDiff>0||amountDiff>0;return [esc(item.description),qty,money(unitCost),esc(item.unit),money(plannedTotal),'<b>'+actualQty+'</b>','<b class="negative">'+money(actualAmount)+'</b>','<b class="'+(qtyDiff>0?'negative':qtyDiff<0?'positive':'')+'">'+(qtyDiff>0?'+':'')+qtyDiff+'</b>','<b class="'+(amountDiff>0?'negative':amountDiff<0?'positive':'')+'">'+(amountDiff>0?'+':'')+money(amountDiff)+'</b>','<span class="pill '+(over?'over':'done')+'">'+(over?'Over':'Within')+'</span>',esc(item.remarks),buttons('items',item.id)]})]);
+    return Object.keys(groups).flatMap(category=>[`<tr class="category-row"><td colspan="${headers.length+1}"><div class="toolbar" style="justify-content:space-between"><span>${esc(category)}</span><span class="toolbar"><button class="btn secondary" style="padding:5px 8px;text-transform:none;letter-spacing:0;min-width:30px" title="Move category up" aria-label="Move category up" data-move-category="${esc(category)}|up">▲</button><button class="btn secondary" style="padding:5px 8px;text-transform:none;letter-spacing:0;min-width:30px" title="Move category down" aria-label="Move category down" data-move-category="${esc(category)}|down">▼</button><button class="btn secondary" style="padding:5px 8px;text-transform:none;letter-spacing:0" data-edit-category="${esc(category)}">Edit Category</button></span></div></td></tr>`,...groups[category].map(item=>{let qty=itemPoQty(item),unitCost=itemPoMc(item),actualQty=itemPurchasedQty(item),actualAmount=itemPurchasedAmount(item),plannedTotal=qty*unitCost,qtyDiff=actualQty-qty,amountDiff=actualAmount-plannedTotal,over=qtyDiff>0||amountDiff>0,delivered=deliveredQty(item);return [esc(item.description),qty,...(consumerGoods?[delivered]:[]),money(unitCost),esc(item.unit),money(plannedTotal),'<b>'+actualQty+'</b>','<b class="negative">'+money(actualAmount)+'</b>','<b class="'+(qtyDiff>0?'negative':qtyDiff<0?'positive':'')+'">'+(qtyDiff>0?'+':'')+qtyDiff+'</b>','<b class="'+(amountDiff>0?'negative':amountDiff<0?'positive':'')+'">'+(amountDiff>0?'+':'')+money(amountDiff)+'</b>','<span class="pill '+(over?'over':'done')+'">'+(over?'Over':'Within')+'</span>',esc(item.remarks),buttons('items',item.id)]})]);
   };
   const style=document.createElement('style');
   style.textContent='.scroll table:has(th.item-col) th.boq-neutral,.scroll table:has(th.item-col) td.boq-neutral,.scroll table:has(th.item-col) th:nth-child(4),.scroll table:has(th.item-col) td:nth-child(4),.scroll table:has(th.item-col) th:nth-child(5),.scroll table:has(th.item-col) td:nth-child(5),.scroll table:has(th.item-col) th:nth-child(6),.scroll table:has(th.item-col) td:nth-child(6),.scroll table:has(th.item-col) th:nth-child(7),.scroll table:has(th.item-col) td:nth-child(7){background:#fff!important;color:#343a40!important}.dark-mode .scroll table:has(th.item-col) th.boq-neutral,.dark-mode .scroll table:has(th.item-col) td.boq-neutral,body.dark-mode .scroll table:has(th.item-col) th.boq-neutral,body.dark-mode .scroll table:has(th.item-col) td.boq-neutral,body.dark-mode .scroll table:has(th.item-col) th:nth-child(4),body.dark-mode .scroll table:has(th.item-col) td:nth-child(4),body.dark-mode .scroll table:has(th.item-col) th:nth-child(5),body.dark-mode .scroll table:has(th.item-col) td:nth-child(5),body.dark-mode .scroll table:has(th.item-col) th:nth-child(6),body.dark-mode .scroll table:has(th.item-col) td:nth-child(6),body.dark-mode .scroll table:has(th.item-col) th:nth-child(7),body.dark-mode .scroll table:has(th.item-col) td:nth-child(7){background:#202630!important;color:#e3e8ee!important}';
@@ -2560,7 +2559,8 @@ body.dark-mode .scroll table:has(th.item-col) td:nth-child(10) .pill.over{backgr
   const baseRecordTableWithOriginalHeaders=recordTable;
   recordTable=function(rows){
     if(tab==='items'){
-      return table(['Item / Material','Qty','Unit Cost','Unit','Total Cost','Actual Qty Purchase','Amount Purchase','Remaining/Difference','Amount Difference','Status','Remarks','Actions'],itemRecordRows(rows));
+      const consumerGoods=String(project()?.company||'').trim().toLowerCase()==='kindrich consumer goods trading';
+      return table(consumerGoods?['Item / Material','Qty','Qty Delivered','Unit Cost','Unit','Total Cost','Actual Qty Purchase','Amount Purchase','Remaining/Difference','Amount Difference','Status','Remarks','Actions']:['Item / Material','Qty','Unit Cost','Unit','Total Cost','Actual Qty Purchase','Amount Purchase','Remaining/Difference','Amount Difference','Status','Remarks','Actions'],itemRecordRows(rows));
     }
     return baseRecordTableWithOriginalHeaders(rows);
   };
@@ -2767,6 +2767,195 @@ body.dark-mode .scroll table:has(th.item-col) td:nth-child(10) .pill.over{backgr
   document.getElementById('form')?.addEventListener('submit',event=>{if(formType!=='worker')return;event.preventDefault();event.stopImmediatePropagation();const fd=new FormData(event.target),name=String(fd.get('workerName')||'').trim(),role=String(fd.get('workerRole')||'').trim(),contact=String(fd.get('workerContact')||'').trim();if(!name){alert('Worker / Crew name is required.');return}if(workersForProject().some(worker=>worker.name.toLowerCase()===name.toLowerCase())){alert('This worker already exists in this project.');return}db.workers.push({id:uid(),project:projectId,name,role,contact,createdAt:new Date().toISOString()});writeLog('Add','Worker',name);$('modal').classList.remove('show');save()},true);
   const baseDetailForWorkers=detail;
   detail=function(){baseDetailForWorkers.apply(this,arguments);if(tab!=='manpower')return;const add=document.getElementById('addRow'),bar=add?.parentElement;if(bar&&!document.getElementById('addProjectWorker')){const button=document.createElement('button');button.className='btn secondary';button.id='addProjectWorker';button.type='button';button.innerHTML='<i class="bi bi-person-plus" aria-hidden="true"></i> Add Worker';button.onclick=openWorkerForm;const list=document.createElement('button');list.className='btn secondary';list.id='showProjectWorkers';list.type='button';list.innerHTML='<i class="bi bi-people" aria-hidden="true"></i> Show Workers';list.onclick=openWorkerList;bar.insertBefore(list,add);bar.insertBefore(button,list)} };
+})();
+</script>
+<script>
+(function(){
+  const baseOpenFormForCashConversion=openForm;
+  function openSimpleCashConversionForm(id=null){
+    const existing=id?(db.itemConversions||[]).find(item=>item.id===id):null;
+    formType='simpleItemCashConversion';
+    editing=id;
+    const form=$('form');
+    form.dataset.formType='simpleItemCashConversion';
+    form.querySelector('[type=submit]').style.display='';
+    form.querySelector('[type=submit]').innerHTML='<i class="bi bi-check2"></i> Save Conversion';
+    $('modal').querySelector('.dialog').classList.add('wide-dialog');
+    $('modalTitle').textContent=(id?'Edit ':'Add ')+'Item to Cash Conversion';
+    $('fields').innerHTML='<div class="group"><label>Date</label><input class="field" name="cashConversionDate" type="date" value="'+esc(existing?.date||todayLocal())+'" required></div><div class="group"><label>Amount (₱)</label><input class="field" name="cashConversionAmount" type="number" min="0.01" step="any" inputmode="decimal" value="'+esc(existing?.conversionAmount??'')+'" required></div><div class="group wide"><label>Remarks</label><textarea class="field" name="cashConversionRemarks" rows="3" maxlength="500">'+esc(existing?.remarks||'')+'</textarea></div><div class="group wide"><p class="sub"><i class="bi bi-info-circle" aria-hidden="true"></i> This amount will be deducted from the project remaining budget.</p></div>';
+    $('modal').classList.add('show');
+  }
+  openForm=function(type,id=null){
+    if(type==='itemConversions'){
+      const existing=id?(db.itemConversions||[]).find(item=>item.id===id):null;
+      if(!existing||existing.conversionType==='cash'){openSimpleCashConversionForm(id);return}
+    }
+    baseOpenFormForCashConversion(type,id);
+  };
+  $('form')?.addEventListener('submit',event=>{
+    const form=event.target;
+    if(form?.dataset.formType!=='simpleItemCashConversion')return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    const amount=num(form.querySelector('[name="cashConversionAmount"]')?.value);
+    if(amount<=0){alert('Enter a valid conversion amount.');return}
+    const existing=editing?(db.itemConversions||[]).find(item=>item.id===editing):null;
+    const record={id:editing||uid(),project:projectId,date:String(form.querySelector('[name="cashConversionDate"]')?.value||todayLocal()),conversionType:'cash',sourceItemId:existing?.sourceItemId||'',sourceDescription:existing?.sourceDescription||'Item to Cash',sourceUnit:existing?.sourceUnit||'',sourceQty:0,sourceUnitCost:0,sourceValue:amount,adjustmentPercent:0,destinationItemId:'',destinationDescription:'Cash',destinationUnit:'',destinationQty:0,conversionFactor:0,conversionAmount:amount,remarks:String(form.querySelector('[name="cashConversionRemarks"]')?.value||'').trim(),createdAt:existing?.createdAt||todayLocal()};
+    const index=(db.itemConversions||[]).findIndex(item=>item.id===record.id);
+    if(index>=0){db.itemConversions[index]=record;writeLog('Update','Item Conversion','Item to Cash: '+money(amount))}else{db.itemConversions.push(record);writeLog('Add','Item Conversion','Item to Cash: '+money(amount))}
+    $('modal').classList.remove('show');
+    save();
+  },true);
+})();
+</script>
+<script>
+(function(){
+  function deliveryExcelRows(){
+    const items=linked('items',projectId);
+    return [['Date','Delivery No. (Optional)','Delivered By','Item / Material','Qty Delivered','Unit','Unit Cost (₱)','Total Amount (₱)','Item Remarks','Delivery Remarks'],...items.map(item=>['','', '',item.description||'', '',item.unit||'', '', '', '', ''])];
+  }
+  function downloadDeliveryTemplate(){
+    const rows=deliveryExcelRows();
+    if(window.XLSX){const ws=XLSX.utils.aoa_to_sheet(rows),wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Deliveries');XLSX.writeFile(wb,'kindrich_delivery_format.xlsx')}
+    else download('kindrich_delivery_format.csv',rows.map(row=>row.map(value=>'"'+String(value??'').replace(/"/g,'""')+'"').join(',')).join('\r\n'),'text/csv');
+  }
+  function deliveryImportValue(row,aliases){return rowValue(row,aliases)}
+  async function importDeliveryFile(file){
+    if(!file)return;
+    try{
+      let rows=[],name=file.name.toLowerCase();
+      if(name.endsWith('.csv'))rows=parseCsv(await file.text());
+      else{if(!window.XLSX){alert('Excel parser is still loading. Please try again.');return}const buffer=await file.arrayBuffer(),wb=XLSX.read(buffer,{type:'array'}),sheet=wb.Sheets[wb.SheetNames[0]];rows=XLSX.utils.sheet_to_json(sheet,{defval:''})}
+      const groups=new Map(),errors=[];
+      rows.forEach((row,index)=>{
+        if(!Object.values(row||{}).some(value=>String(value??'').trim()!==''))return;
+        const rowNo=index+2,date=importPurchaseDate(deliveryImportValue(row,['Date','Delivery Date']))||todayLocal(),deliveryNo=String(deliveryImportValue(row,['Delivery No.','Delivery No','Delivery Number'])).trim(),supplier=String(deliveryImportValue(row,['Delivered By','Supplier','Supplier / Delivered By'])).trim(),item=String(deliveryImportValue(row,['Item / Material','Item / Materials Description','Items / Materials Description','Description'])).trim(),qty=num(deliveryImportValue(row,['Qty Delivered','Qty','Quantity','Delivery Qty'])),unit=String(deliveryImportValue(row,['Unit','UOM'])).trim(),unitCost=num(deliveryImportValue(row,['Unit Cost','Unit Cost (₱)','Cost per Qty'])),amount=num(deliveryImportValue(row,['Total Amount','Total Amount (₱)','Amount','Amount (₱)','Delivery Amount']))||qty*unitCost,lineRemarks=String(deliveryImportValue(row,['Item Remarks','Line Remarks','Remarks'])).trim(),remarks=String(deliveryImportValue(row,['Delivery Remarks','Delivery Remark'])).trim();
+        if(!item||qty<=0||unitCost<0){errors.push('Row '+rowNo+': Item / Material, Qty Delivered, and Unit Cost are required.');return}
+        const key=[date,deliveryNo,supplier,remarks].join('|'),group=groups.get(key)||{id:uid(),project:projectId,date,deliveryNo,supplier,remarks,lines:[]};
+        group.lines.push({itemId:(linked('items',projectId).find(record=>String(record.description||'').trim().toLowerCase()===item.toLowerCase())||{}).id||'',item,qty,unit,unitCost,amount,remarks:lineRemarks});
+        groups.set(key,group);
+      });
+      const imported=[...groups.values()];
+      if(!imported.length){alert(errors.length?'No delivery rows imported. '+errors.join('\n'):'No valid delivery rows found. Fill Item / Material and Qty.');return}
+      db.deliveries.push(...imported);writeLog('Add','Delivery Import',imported.length+' delivery record(s) uploaded'+(errors.length?' with '+errors.length+' rejected row(s)':''));save();
+      if(errors.length)alert(imported.length+' delivery record(s) imported.\n\n'+errors.join('\n'));
+    }catch(error){alert('Delivery import failed: '+error.message)}finally{const input=document.getElementById('deliveryImportFile');if(input)input.value=''}
+  }
+  const baseDetailWithDeliveryExcel=detail;
+  detail=function(){
+    baseDetailWithDeliveryExcel.apply(this,arguments);
+    if(page!=='detail'||tab!=='delivery')return;
+    const add=document.getElementById('addDelivery'),bar=add?.parentElement;
+    if(!bar||document.getElementById('deliveryImportFile'))return;
+    bar.insertAdjacentHTML('afterbegin','<input id="deliveryImportFile" type="file" accept=".xlsx,.xls,.csv" hidden><button class="btn secondary" id="downloadDeliveryFormat" type="button" title="Download delivery Excel format"><i class="bi bi-download" aria-hidden="true"></i> Download Delivery Format</button><button class="btn secondary" id="uploadDeliveryFormat" type="button" title="Upload delivery Excel"><i class="bi bi-upload" aria-hidden="true"></i> Upload Delivery Excel</button>');
+    document.getElementById('downloadDeliveryFormat').onclick=downloadDeliveryTemplate;
+    document.getElementById('uploadDeliveryFormat').onclick=()=>document.getElementById('deliveryImportFile').click();
+    document.getElementById('deliveryImportFile').onchange=event=>importDeliveryFile(event.target.files[0]);
+  };
+})();
+</script>
+<script>
+(function(){
+  let deliveryDetailId='',deliveryDetailSearch='';
+  const deliveryRecords=()=>linked('deliveries',projectId).filter(record=>!record.deleted);
+  const deliveryTotal=record=>(Array.isArray(record?.lines)?record.lines:[]).reduce((total,line)=>total+num(line.amount),0);
+  const deliveryItemRows=record=>{const query=deliveryDetailSearch.trim().toLowerCase(),lines=Array.isArray(record?.lines)?record.lines:[];return lines.map((line,index)=>({line,index})).filter(({line})=>!query||[line.item,line.unit,line.remarks,line.qty,line.amount].some(value=>String(value??'').toLowerCase().includes(query)))};
+  function downloadDeliveryItemTemplate(){
+    const rows=[['Item / Material','Qty','Unit','Amount (₱)','Remarks'],...linked('items',projectId).map(item=>[item.description||'','',item.unit||'','',''])];
+    if(window.XLSX){const ws=XLSX.utils.aoa_to_sheet(rows),wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Delivery Items');XLSX.writeFile(wb,'kindrich_delivery_items.xlsx')}
+    else download('kindrich_delivery_items.csv',rows.map(row=>row.map(value=>'"'+String(value??'').replace(/"/g,'""')+'"').join(',')).join('\r\n'),'text/csv');
+  }
+  async function importDeliveryItems(file,record){
+    if(!file||!record)return;
+    try{
+      let rows=[],name=file.name.toLowerCase();
+      if(name.endsWith('.csv'))rows=parseCsv(await file.text());
+      else{if(!window.XLSX){alert('Excel parser is still loading. Please try again.');return}const buffer=await file.arrayBuffer(),wb=XLSX.read(buffer,{type:'array'}),sheet=wb.Sheets[wb.SheetNames[0]];rows=XLSX.utils.sheet_to_json(sheet,{defval:''})}
+      const items=linked('items',projectId),imported=[],errors=[];
+      rows.forEach((row,index)=>{
+        if(!Object.values(row||{}).some(value=>String(value??'').trim()!==''))return;
+        const rowNo=index+2,item=String(rowValue(row,['Item / Material','Item / Materials Description','Items / Materials Description','Description'])).trim(),qty=num(rowValue(row,['Qty','Quantity'])),unit=String(rowValue(row,['Unit','UOM'])).trim(),amount=num(rowValue(row,['Amount','Amount (₱)','Total Amount'])),remarks=String(rowValue(row,['Remarks','Item Remarks'])).trim(),match=items.find(value=>String(value.description||'').trim().toLowerCase()===item.toLowerCase());
+        if(!item||qty<=0){errors.push('Row '+rowNo+': Item / Material and Qty are required.');return}
+        imported.push({itemId:match?.id||'',item,qty,unit:unit||match?.unit||'',amount,remarks});
+      });
+      if(!imported.length){alert(errors.length?'No items imported. '+errors.join('\n'):'No valid delivery items found.');return}
+      record.lines=[...(Array.isArray(record.lines)?record.lines:[]),...imported];
+      writeLog('Update','Delivery Items',imported.length+' item(s) uploaded to '+(record.deliveryNo||record.date));save();
+      deliveryDetailSearch='';
+      if(errors.length)alert(imported.length+' item(s) imported.\n\n'+errors.join('\n'));
+      else render();
+    }catch(error){alert('Delivery item upload failed: '+error.message)}finally{const input=document.getElementById('deliveryItemImportFile');if(input)input.value=''}
+  }
+  function renderDeliveryFolders(){
+    const records=document.getElementById('records'),rows=deliveryRecords();
+    if(!records)return;
+    records.innerHTML=rows.length?'<div class="delivery-folder-grid">'+rows.map(record=>{const count=(record.lines||[]).length;return '<article class="delivery-folder"><button type="button" class="delivery-folder-open" data-delivery-open="'+esc(record.id)+'"><i class="bi bi-folder2-open" aria-hidden="true"></i><strong>'+esc(record.deliveryNo||'Delivery '+(record.date||''))+'</strong><span>'+esc(record.date||'')+'</span></button><div class="delivery-folder-meta"><span>'+esc(record.supplier||'No delivered-by name')+'</span><span>'+count+' item'+(count===1?'':'s')+'</span><b>'+money(deliveryTotal(record))+'</b></div><div class="delivery-folder-actions">'+buttons('delivery',record.id)+'</div></article>'}).join('')+'</div>':'<div class="empty">No deliveries saved for this project yet.</div>';
+    records.querySelectorAll('[data-delivery-open]').forEach(button=>button.onclick=()=>{deliveryDetailId=button.dataset.deliveryOpen;deliveryDetailSearch='';render()});
+    bindActions();
+  }
+  function renderDeliveryDetail(record){
+    const records=document.getElementById('records'),rows=deliveryItemRows(record);
+    if(!records)return;
+    records.innerHTML='<div class="delivery-detail-heading"><div><h3 style="margin:0">'+esc(record.deliveryNo||'Delivery Details')+'</h3><div class="sub">'+esc(record.date||'')+' · '+esc(record.supplier||'No delivered-by name')+' · '+(record.lines||[]).length+' items</div></div><strong class="positive">'+money(deliveryTotal(record))+'</strong></div><div class="toolbar delivery-item-tools"><input class="field" id="deliveryItemSearch" placeholder="Search delivered items"><button class="btn secondary" id="runDeliveryItemSearch" type="button"><i class="bi bi-search" aria-hidden="true"></i> Search</button><button class="btn secondary" id="clearDeliveryItemSearch" type="button"><i class="bi bi-x-circle" aria-hidden="true"></i> Clear</button><button class="btn secondary" id="downloadDeliveryItemFormat" type="button"><i class="bi bi-download" aria-hidden="true"></i> Download Item Format</button><input id="deliveryItemImportFile" type="file" accept=".xlsx,.xls,.csv" hidden><button class="btn secondary" id="uploadDeliveryItemFormat" type="button"><i class="bi bi-upload" aria-hidden="true"></i> Upload Items</button></div>'+table(['No.','Item / Material','Qty','Unit','Amount','Remarks'],rows.map(({line,index})=>[index+1,esc(line.item||''),num(line.qty),esc(line.unit||''),money(line.amount),esc(line.remarks||'')]))+'<p class="sub">'+esc(record.remarks||'')+'</p>';
+    document.getElementById('deliveryItemSearch').value=deliveryDetailSearch;
+    document.getElementById('runDeliveryItemSearch').onclick=()=>{deliveryDetailSearch=document.getElementById('deliveryItemSearch').value;renderDeliveryDetail(record)};
+    document.getElementById('clearDeliveryItemSearch').onclick=()=>{deliveryDetailSearch='';renderDeliveryDetail(record)};
+    document.getElementById('deliveryItemSearch').onkeydown=event=>{if(event.key==='Enter'){event.preventDefault();document.getElementById('runDeliveryItemSearch').click()}};
+    document.getElementById('downloadDeliveryItemFormat').onclick=downloadDeliveryItemTemplate;
+    document.getElementById('uploadDeliveryItemFormat').onclick=()=>document.getElementById('deliveryItemImportFile').click();
+    document.getElementById('deliveryItemImportFile').onchange=event=>importDeliveryItems(event.target.files[0],record);
+  }
+  const baseDetailWithDeliveryFolders=detail;
+  detail=function(){
+    deliveryDetailId='';
+    deliveryDetailSearch='';
+    baseDetailWithDeliveryFolders.apply(this,arguments);
+  };
+  const deliveryFolderStyle=document.createElement('style');
+  deliveryFolderStyle.textContent='.delivery-folder-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(245px,1fr));gap:12px}.delivery-folder{border:1px solid var(--line);border-radius:10px;padding:12px;background:var(--panel);box-shadow:0 3px 12px rgba(22,48,82,.06)}.delivery-folder-open{border:0;background:transparent;color:inherit;display:flex;flex-direction:column;align-items:flex-start;gap:4px;width:100%;cursor:pointer;text-align:left}.delivery-folder-open i{font-size:24px;color:var(--blue)}.delivery-folder-open strong{font-size:14px}.delivery-folder-open span,.delivery-folder-meta span{font-size:11px;color:var(--muted)}.delivery-folder-meta{display:grid;gap:4px;border-top:1px solid var(--line);margin-top:10px;padding-top:9px}.delivery-folder-meta b{color:var(--negative);font-size:14px}.delivery-folder-actions{display:flex;justify-content:flex-end;margin-top:8px}.delivery-detail-heading{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);padding:4px 0 12px;margin-bottom:12px}.delivery-detail-heading>strong{font-size:18px}.delivery-item-tools{margin-bottom:12px;gap:6px}.delivery-item-tools .field{min-width:180px}@media(max-width:650px){.delivery-item-tools .field{width:100%}.delivery-detail-heading{align-items:flex-start;gap:10px}.delivery-detail-heading>strong{font-size:15px}}';
+  document.head.appendChild(deliveryFolderStyle);
+})();
+</script>
+<script>
+(function(){
+  let previewInput=null;
+  function previewRows(rows){
+    const list=Array.isArray(rows)?rows:[],keys=[...new Set(list.flatMap(row=>Object.keys(row||{})))];
+    return {keys,rows:list};
+  }
+  function closeExcelPreview(clear=true){
+    const modal=document.getElementById('excelPreviewModal');
+    if(modal)modal.classList.remove('show');
+    if(clear&&previewInput)previewInput.value='';
+    previewInput=null;
+  }
+  function showExcelPreview(input,file,rows){
+    const modal=document.getElementById('excelPreviewModal')||document.body.appendChild(document.createElement('div'));
+    modal.id='excelPreviewModal';modal.className='modal show';
+    const data=previewRows(rows),displayRows=data.rows.slice(0,300);
+    modal.innerHTML='<div class="dialog wide-dialog excel-preview-dialog" role="dialog" aria-modal="true" aria-labelledby="excelPreviewTitle"><div class="toolbar" style="justify-content:space-between;margin-bottom:12px"><div><h3 id="excelPreviewTitle" style="margin:0">Preview Upload Data</h3><div class="sub">'+esc(file.name)+' · '+data.rows.length+' row'+(data.rows.length===1?'':'s')+' found'+(data.rows.length>300?' · Showing first 300 rows':'')+'</div></div><button class="btn secondary" type="button" id="cancelExcelPreview" aria-label="Cancel upload">Cancel</button></div><div class="scroll excel-preview-table">'+(data.keys.length?table(data.keys,displayRows.map(row=>data.keys.map(key=>esc(row?.[key]??'')) )):'<div class="empty">No rows found in this file.</div>')+'</div><div class="foot"><button class="btn secondary" type="button" id="cancelExcelPreviewBottom">Cancel</button><button class="btn" type="button" id="confirmExcelPreview"><i class="bi bi-upload" aria-hidden="true"></i> Upload Data</button></div></div>';
+    previewInput=input;
+    document.getElementById('cancelExcelPreview').onclick=()=>closeExcelPreview(true);
+    document.getElementById('cancelExcelPreviewBottom').onclick=()=>closeExcelPreview(true);
+    document.getElementById('confirmExcelPreview').onclick=()=>{const target=previewInput;closeExcelPreview(false);if(target){target.dataset.previewApproved='1';target.dispatchEvent(new Event('change',{bubbles:true}))}};
+  }
+  async function previewExcelFile(input,file){
+    try{
+      let rows=[],name=file.name.toLowerCase();
+      if(name.endsWith('.csv'))rows=parseCsv(await file.text());
+      else{if(!window.XLSX){alert('Excel parser is still loading. Please try again.');input.value='';return}const buffer=await file.arrayBuffer(),wb=XLSX.read(buffer,{type:'array'}),sheet=wb.Sheets[wb.SheetNames[0]];rows=XLSX.utils.sheet_to_json(sheet,{defval:''})}
+      if(!rows.length){alert('The selected file has no data rows.');input.value='';return}
+      showExcelPreview(input,file,rows);
+    }catch(error){alert('Unable to preview this file: '+error.message);input.value=''}
+  }
+  document.addEventListener('change',event=>{
+    const input=event.target;
+    if(!(input instanceof HTMLInputElement)||input.type!=='file'||!input.files?.[0])return;
+    if(input.dataset.previewApproved==='1'){delete input.dataset.previewApproved;return}
+    event.stopImmediatePropagation();
+    previewExcelFile(input,input.files[0]);
+  },true);
+  const style=document.createElement('style');style.textContent='.excel-preview-dialog{width:min(1180px,100%)}.excel-preview-table{max-height:58vh;border:1px solid var(--line);border-radius:8px}.excel-preview-table table{margin:0}.excel-preview-table td,.excel-preview-table th{white-space:nowrap}.excel-preview-dialog .foot{justify-content:flex-end}';document.head.appendChild(style);
 })();
 </script>
 </body>
