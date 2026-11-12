@@ -10,8 +10,8 @@
 <link rel="stylesheet" href="assets/bootstrap-icons/bootstrap-icons.min.css">
 <script>
 (function(){
-  function deliveryDialogLine(line){return '<div class="canvass-line delivery-line" data-delivery-line><div class="mini"><label>Item / Material</label><input class="field" name="deliveryItem" value="'+esc(line.item||'')+'" required></div><div class="mini"><label>Qty Delivered</label><input class="field" name="deliveryQty" type="number" min="0" step="any" value="'+num(line.qty)+'" required></div><div class="mini"><label>Unit</label><input class="field" name="deliveryUnit" value="'+esc(line.unit||'')+'"></div><div class="mini"><label>Unit Cost (₱)</label><input class="field" name="deliveryUnitCost" type="number" min="0" step="any" value="'+num(line.unitCost)+'" required></div><div class="mini"><label>Total Amount (₱)</label><input class="field" name="deliveryAmount" type="number" value="'+num(line.amount)+'" readonly></div><div class="mini"><label>Remarks</label><input class="field" name="deliveryLineRemarks" value="'+esc(line.remarks||'')+'"></div></div>'}
-  function bindDeliveryDialogFields(){const box=document.getElementById('deliveryLines');if(!box||box.dataset.dialogCalcBound)return;box.dataset.dialogCalcBound='1';const sync=row=>{const qty=num(row.querySelector('[name="deliveryQty"]')?.value),unitCost=num(row.querySelector('[name="deliveryUnitCost"]')?.value),amount=row.querySelector('[name="deliveryAmount"]');if(amount)amount.value=(qty*unitCost).toFixed(2)};box.addEventListener('input',event=>{if(event.target.matches('[name="deliveryQty"],[name="deliveryUnitCost"]'))sync(event.target.closest('[data-delivery-line]'))});box.querySelectorAll('[data-delivery-line]').forEach(sync)}
+  function deliveryDialogLine(line){return '<div class="canvass-line delivery-line" data-delivery-line data-unit-cost="'+num(line.unitCost)+'" data-amount="'+num(line.amount)+'"><div class="mini"><label>Item / Material</label><input class="field" name="deliveryItem" value="'+esc(line.item||'')+'" required></div><div class="mini"><label>Qty Delivered</label><input class="field" name="deliveryQty" type="number" min="0" step="any" value="'+num(line.qty)+'" required></div><div class="mini"><label>Unit</label><input class="field" name="deliveryUnit" value="'+esc(line.unit||'')+'"></div><div class="mini"><label>Remarks</label><input class="field" name="deliveryLineRemarks" value="'+esc(line.remarks||'')+'"></div></div>'}
+  function bindDeliveryDialogFields(){const box=document.getElementById('deliveryLines');if(!box||box.dataset.dialogCalcBound)return;box.dataset.dialogCalcBound='1'}
   if(typeof render!=='function'||typeof currentUser!=='function')return;
   payedSummary=function(){return ''};
   const allCompanyIds=()=>companies.map(item=>item.id);
@@ -81,7 +81,7 @@ function logAndSave(action,target,details=''){writeLog(action,target,details);sa
 function enforceConfiguredUser(){if(db.users.length)return;db.activeUser='';loggedIn=false;sessionStorage.removeItem('kindrich_logged_in')}
 enforceConfiguredUser();
 function data(){return db}
-function projects(){return (db.projects||[]).filter(x=>!x.company||x.company===company)}
+function projects(){const selectedCompany=(companies||[]).find(item=>String(item.id)===String(company)),selectedId=String(company||''),selectedName=String(selectedCompany?.name||'').trim().toLowerCase();return (db.projects||[]).filter(x=>{const value=String(x.company||'').trim();return !value||value===selectedId||value.toLowerCase()===selectedName})}
 function linked(type,id){return (db[type]||[]).filter(x=>!x.deleted&&String(x.project??x.projectId??'')===String(id??''))}
 function project(){return (db.projects||[]).find(x=>x.id===projectId)||null}
 function purchaseAmount(x){return num(x?.amount)||num(x?.qty)*num(x?.unitCost||x?.cost)}
@@ -96,7 +96,7 @@ function totals(p){let id=p?.id,materials=linked('purchases',id).reduce((a,x)=>a
 function canvassLines(x){let lines=Array.isArray(x.lines)&&x.lines.length?x.lines:[{itemId:x.itemId,item:x.item,qty:x.qty,unit:x.unit,unitCost:x.unitCost,additionalAmount:x.additionalAmount,amount:x.amount,additionalRemarks:x.additionalRemarks,remarks:x.remarks}];return lines.map(line=>{let item=linked('items',x.project||projectId).find(i=>i.id===line.itemId)||linked('items',x.project||projectId).find(i=>i.description===line.item)||{};let qty=num(line.qty),unitCost=num(line.unitCost)||itemPoMc(item),additionalAmount=num(line.additionalAmount),amount=num(line.amount)||qty*unitCost+additionalAmount;return {...line,itemId:line.itemId||item.id||'',item:line.item||item.description||'',qty,unit:line.unit||item.unit||'',unitCost,additionalAmount,amount,additionalRemarks:line.additionalRemarks||'',remarks:line.remarks||''}})}
 function canvassTotal(x){return canvassLines(x).reduce((a,line)=>a+num(line.amount),0)}
 function canvassDetails(x){let lines=canvassLines(x);return `<div style="min-width:360px">${lines.map(line=>`<div><b>${esc(line.item)}</b> - ${num(line.qty)} ${esc(line.unit)} x ${money(line.unitCost)}${num(line.additionalAmount)?` + ${money(line.additionalAmount)}`:''} = <b>${money(line.amount)}</b>${line.additionalRemarks?`<div class="sub">${esc(line.additionalRemarks)}</div>`:''}${line.remarks?`<div class="sub">${esc(line.remarks)}</div>`:''}</div>`).join('<hr style="border:0;border-top:1px solid #e5edf5;margin:7px 0">')}</div>`}
-const specs={project:[['company','Company','company'],['code','Project Code','text'],['name','Project Name','text'],['client','Client / Customer','text'],['location','Location','text'],['start','Start Date','date'],['durationDays','Number of Days','number'],['extensionDays','Time Extension Days','number'],['end','Target End Date','date'],['budget','Contract / Project Budget (₱)','number'],['retentionPercent','Retention %','number'],['retentionAmount','Retention Amount (₱)','number'],['taxAmount','Tax Amount (₱)','number'],['manpowerBudget','Manpower Budget (₱)','number'],['status','Status','status'],['details','Project Details / Scope','textarea']],items:[['category','Category','text'],['description','Item / Material','text'],['unit','Unit','text'],['qty','Purchase Qty','number'],['mc','Purchase Unit Cost (₱)','number'],['poQty','Actual P.O Qty','number'],['poMc','Actual P.O Unit Cost (₱)','number'],['remarks','Remarks','textarea']],purchases:[['itemId','Item / Material','itemRef'],['purchaseNo','Purchase No.','purchaseNo'],['date','Purchase Date','date'],['voucherNo','Voucher No. (Optional)','text'],['qty','Quantity','number'],['unitCost','Item Cost (₱)','number'],['amount','Total Amount (₱)','number'],['remarks','Remarks','textarea']],manpower:[['date','Date','date'],['name','Worker / Crew','text'],['role','Role / Work','text'],['days','Days / Units','number'],['rate','Rate (₱)','number'],['remarks','Remarks','textarea']],expenses:[['date','Date','date'],['voucherNo','Voucher No. (Optional)','text'],['category','Category','categoryList'],['description','Expense Description','text'],['amount','Amount (₱)','number'],['remarks','Remarks','textarea']],canvassing:[['date','Date','date'],['itemId','Item / Material','canvassItemRef'],['supplier','Supplier','text'],['qty','Qty','number'],['unit','Unit','text'],['unitCost','Unit Price (₱)','number'],['additionalAmount','Additional Amount (₱)','number'],['amount','Total Amount (₱)','number'],['additionalRemarks','Additional Remarks','textarea'],['remarks','Remarks','textarea']],vouchering:[['date','Voucher Date','date'],['voucherNo','Voucher No.','text'],['payee','Payee','text'],['description','Description / Purpose','text'],['amount','Amount (₱)','number'],['status','Status','voucherStatus'],['remarks','Remarks','textarea']],payed:[['date','Payment Date','date'],['mode','Mode of Payment','text'],['description','Description / Reference','text'],['amount','Amount Payed (₱)','number'],['remarks','Remarks','textarea']]};
+const specs={project:[['company','Company','company'],['code','Project Code','text'],['name','Project Name','text'],['client','Client / Customer','text'],['location','Location','text'],['start','Start Date','date'],['durationDays','Number of Days','number'],['extensionDays','Time Extension Days','number'],['end','Target End Date','date'],['budget','Contract / Project Budget (₱)','number'],['retentionPercent','Retention %','number'],['retentionAmount','Retention Amount (₱)','number'],['taxAmount','Tax Amount (₱)','number'],['manpowerBudget','Manpower Budget (₱)','number'],['status','Status','status'],['details','Project Details / Scope','textarea']],items:[['category','Category','text'],['description','Item / Material','text'],['unit','Unit','text'],['poQty','Actual P.O Qty','number'],['poMc','Actual P.O Unit Cost (₱)','number'],['remarks','Remarks','textarea']],purchases:[['itemId','Item / Material','itemRef'],['purchaseNo','Purchase No.','purchaseNo'],['date','Purchase Date','date'],['voucherNo','Voucher No. (Optional)','text'],['qty','Quantity','number'],['unitCost','Item Cost (₱)','number'],['amount','Total Amount (₱)','number'],['remarks','Remarks','textarea']],manpower:[['date','Date','date'],['name','Worker / Crew','text'],['role','Role / Work','text'],['days','Days / Units','number'],['rate','Rate (₱)','number'],['remarks','Remarks','textarea']],expenses:[['date','Date','date'],['voucherNo','Voucher No. (Optional)','text'],['category','Category','categoryList'],['description','Expense Description','text'],['amount','Amount (₱)','number'],['remarks','Remarks','textarea']],canvassing:[['date','Date','date'],['itemId','Item / Material','canvassItemRef'],['supplier','Supplier','text'],['qty','Qty','number'],['unit','Unit','text'],['unitCost','Unit Price (₱)','number'],['additionalAmount','Additional Amount (₱)','number'],['amount','Total Amount (₱)','number'],['additionalRemarks','Additional Remarks','textarea'],['remarks','Remarks','textarea']],vouchering:[['date','Voucher Date','date'],['voucherNo','Voucher No.','text'],['payee','Payee','text'],['description','Description / Purpose','text'],['amount','Amount (₱)','number'],['status','Status','voucherStatus'],['remarks','Remarks','textarea']],payed:[['date','Payment Date','date'],['mode','Mode of Payment','text'],['description','Description / Reference','text'],['amount','Amount Payed (₱)','number'],['remarks','Remarks','textarea']]};
 function rowValue(row,names){let entries=Object.entries(row||{}),norm=x=>String(x||'').toLowerCase().replace(/[^a-z0-9]/g,''),wanted=names.map(norm),aliases={date:['salarydate'],days:['day'],rateperday:['rateday']},hit=entries.find(([k])=>{let key=norm(k);return wanted.includes(key)||wanted.some(name=>(aliases[name]||[]).includes(key))});return hit?hit[1]:''}
 function parseCsv(text){let lines=String(text||'').split(/\r?\n/).filter(x=>x.trim());if(!lines.length)return [];let parse=line=>{let out=[],cur='',q=false;for(let i=0;i<line.length;i++){let c=line[i];if(c==='\"'&&line[i+1]==='\"'){cur+='\"';i++}else if(c==='\"')q=!q;else if(c===','&&!q){out.push(cur);cur=''}else cur+=c}out.push(cur);return out};let heads=parse(lines[0]);return lines.slice(1).map(line=>{let cells=parse(line),row={};heads.forEach((h,i)=>row[h]=cells[i]??'');return row})}
 function normalizeItemImportRow(row,category){category=String(category||rowValue(row,['category','item category','category name'])).trim()||'Uncategorized';let description=String(rowValue(row,['Item / Material','Materials/item description','Material/item description','Materials / item description','Material / item description','Materials','Material','Item','Item Description','Description'])).trim(),qty=num(rowValue(row,['qty','quantity','purchase qty','po qty'])),cost=num(rowValue(row,['Unit Cost','cost','unit cost','unit price','mc','purchase unit cost','actual p.o unit cost'])),unit=String(rowValue(row,['unit','uom'])).trim(),totalCost=num(rowValue(row,['Total Cost','total cost','Total']));remarks=String(rowValue(row,['Remarks','remarks','remark','notes'])).trim();if(!description)return null;return {id:uid(),project:projectId,category,description,unit,qty,mc:cost,poQty:qty,poMc:cost,totalCost:totalCost||qty*cost,remarks}}
@@ -191,8 +191,8 @@ function saveCategoryToFirebase(category){if(window.saveCategoryToFirebase)windo
 window.getWorkspaceData=()=>db;window.applyFirebaseWorkspace=applyFirebaseWorkspace;window.applyFirebaseCategories=applyFirebaseCategories;
 $('loginForm').onsubmit=async e=>{e.preventDefault();let ok=await login($('loginUsername').value.trim(),$('loginPassword').value);$('loginError').style.display=ok?'none':'block'};$('logout').onclick=()=>logout();$('cancel').onclick=()=>$('modal').classList.remove('show');$('modal').onclick=e=>{if(e.target===$('modal'))$('modal').classList.remove('show')};$('company').onchange=e=>{company=e.target.value;page='dashboard';projectId=null;tableExpanded=false;render()};$('add').onclick=()=>openForm('project');$('export')?.addEventListener('click',()=>download('kindrich_workspace_backup.json',JSON.stringify(db,null,2),'application/json'));$('import')?.addEventListener('click',()=>$('file')?.click());$('file')?.addEventListener('change',async e=>{let f=e.target.files[0];if(!f)return;try{let x={...blank(),...JSON.parse(await f.text())};if(!['projects','items','purchases','manpower','expenses'].every(k=>Array.isArray(x[k])))throw Error('Invalid backup structure');x.categories=Array.isArray(x.categories)?x.categories:[];x.canvassing=Array.isArray(x.canvassing)?x.canvassing:[];x.vouchering=Array.isArray(x.vouchering)?x.vouchering:[];x.forwarded=Array.isArray(x.forwarded)?x.forwarded:[];x.payed=Array.isArray(x.payed)?x.payed:[];if(confirm('Replace all workspace data with this backup?')){db=x;ensureConfig();writeLog('Update','Import','Workspace backup imported');save()}}catch(err){alert('Import failed: '+err.message)}e.target.value=''});render();window.addEventListener('load',()=>{if(loggedIn)renderMonthlyExpenseCanvas()});
 window.addEventListener('online',()=>{window.canvasJsFailed=false;if(loggedIn)renderMonthlyExpenseCanvas()});window.addEventListener('offline',()=>{let el=document.getElementById('monthlyExpenseCanvas');if(el)el.innerHTML='<div class="empty">Chart unavailable while offline.</div>'});
-function localNavigationBadgeCounts(){let projectIds=new Set(projects().map(project=>project.id)),pendingDeletion=(db.deleteRequests||[]).filter(item=>item?.status==='Pending').length,pendingCanvass=(db.canvassing||[]).filter(item=>projectIds.has(item?.project)&&item?.approvalStatus==='Requested').length,pendingPurchaseRequests=(db.purchaseRequests||[]).filter(item=>projectIds.has(item?.project)&&item?.approvalStatus==='Requested').length,pendingBatches=(db.manpowerApprovals||[]).filter(item=>projectIds.has(item?.project)&&item?.approvalStatus==='Requested'),batchedIds=new Set(pendingBatches.flatMap(item=>Array.isArray(item.manpowerIds)?item.manpowerIds:[])),pendingLegacyManpower=(db.manpower||[]).filter(item=>projectIds.has(item?.project)&&item?.approvalStatus==='Requested'&&!item?.approvalBatchId&&!batchedIds.has(item.id)).length;return {pendingDeletion,pendingApproval:pendingCanvass+pendingPurchaseRequests+pendingBatches.length+pendingLegacyManpower}}
-function refreshRealtimeNavBadges(){let nav=document.getElementById('nav');if(!nav)return;let counts=window.realtimeNavBadges||localNavigationBadgeCounts();nav.querySelectorAll('[data-nav]').forEach(button=>{let key=button.dataset.nav,count=key==='confirmation'?Number(counts.pendingDeletion||0):key==='approval'?Number(counts.pendingApproval||0):0,badge=button.querySelector('.nav-badge');if(count>0){if(!badge){badge=document.createElement('span');badge.className='nav-badge';button.appendChild(badge)}badge.textContent=count>99?'99+':String(count);badge.setAttribute('aria-label',count+' pending '+(key==='confirmation'?'deletion request':'approval'))}else if(badge)badge.remove()})}
+function localNavigationBadgeCounts(){let projectIds=new Set(projects().map(project=>project.id)),pendingDeletion=(db.deleteRequests||[]).filter(item=>item?.status==='Pending').length,pendingCanvass=(db.canvassing||[]).filter(item=>projectIds.has(item?.project)&&item?.approvalStatus==='Requested').length,pendingPurchaseRequests=(db.purchaseRequests||[]).filter(item=>projectIds.has(item?.project)&&item?.approvalStatus==='Requested').length,pendingBatches=(db.manpowerApprovals||[]).filter(item=>projectIds.has(item?.project)&&item?.approvalStatus==='Requested'),batchedIds=new Set(pendingBatches.flatMap(item=>Array.isArray(item.manpowerIds)?item.manpowerIds:[])),pendingLegacyManpower=(db.manpower||[]).filter(item=>projectIds.has(item?.project)&&item?.approvalStatus==='Requested'&&!item?.approvalBatchId&&!batchedIds.has(item.id)).length,pendingMessages=(db.messages||[]).filter(item=>item?.to===currentUser().id&&!item?.read).length;return {pendingDeletion,pendingApproval:pendingCanvass+pendingPurchaseRequests+pendingBatches.length+pendingLegacyManpower,pendingMessages}}
+function refreshRealtimeNavBadges(){let nav=document.getElementById('nav');if(!nav)return;let counts=window.realtimeNavBadges||localNavigationBadgeCounts(),messageCount=(db.messages||[]).filter(item=>item?.to===currentUser().id&&!item?.read).length;nav.querySelectorAll('[data-nav]').forEach(button=>{let key=button.dataset.nav,count=key==='confirmation'?Number(counts.pendingDeletion||0):key==='approval'?Number(counts.pendingApproval||0):key==='messages'?messageCount:0,badge=button.querySelector('.nav-badge');if(count>0){if(!badge){badge=document.createElement('span');badge.className='nav-badge';button.appendChild(badge)}badge.textContent=count>99?'99+':String(count);badge.setAttribute('aria-label',count+' '+(key==='messages'?'unread message'+(count===1?'':'s'):'pending '+(key==='confirmation'?'deletion request':'approval')))}else if(badge)badge.remove()})}
 window.refreshRealtimeNavBadges=refreshRealtimeNavBadges;
 document.head.insertAdjacentHTML('beforeend','<style>.nav-badge{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;margin-left:auto;padding:0 5px;border-radius:10px;background:#d92d3f;color:#fff;font-size:10px;font-weight:900;line-height:18px;box-shadow:0 0 0 2px #fff}.dark-mode .nav-badge{box-shadow:0 0 0 2px #1d222b}.aside-collapsed .nav-badge{position:absolute;top:3px;right:3px;min-width:16px;height:16px;padding:0 4px;font-size:9px;line-height:16px;box-shadow:0 0 0 2px #fff}.dark-mode.aside-collapsed .nav-badge{box-shadow:0 0 0 2px #1d222b}</style>');
 const navigationBadgeObserver=new MutationObserver(()=>requestAnimationFrame(refreshRealtimeNavBadges));
@@ -658,7 +658,7 @@ document.head.insertAdjacentHTML('beforeend','<style>.import-error-panel{margin-
   function activePurchaseRequestLine(sourceId,lineIndex){return db.purchaseRequests.find(request=>['Requested','Approved'].includes(request.approvalStatus)&&request.lines?.some(line=>line.sourceCanvassId===sourceId&&num(line.lineIndex)===num(lineIndex)))}
   function purchaseRequestRows(project){let rows=[];linked('canvassing',project).filter(x=>x.approvalStatus==='Approved').forEach(canvass=>canvassLines(canvass).forEach((line,index)=>{let request=activePurchaseRequestLine(canvass.id,index);rows.push({canvass,line,index,request})}));return rows}
   function purchaseRequestDetails(request){return (request.lines||[]).map(line=>esc(line.item)+' x '+num(line.qty)+' '+esc(line.unit||'')+' @ '+money(line.unitCost)).join('<br>')}
-  function purchaseRequestTable(){let rows=purchaseRequestRows(projectId),body=rows.map(x=>{let status=x.request?'<span class="pill '+(x.request.approvalStatus==='Approved'?'done':'')+'">'+esc(x.request.approvalStatus)+'</span>':'<span class="pill">Ready</span>';return [x.request?'':`<input type="checkbox" data-pr-line="${esc(x.canvass.id+'|'+x.index)}" ${x.request?'disabled':''}>`,esc(x.canvass.approvedAt||x.canvass.date||''),esc(x.canvass.supplier),esc(x.line.item),num(x.line.qty),esc(x.line.unit||''),`<b class="negative">${money(x.line.amount)}</b>`,status]});return `<div class="toolbar" style="justify-content:space-between;margin-bottom:12px"><div><h3 style="margin:0">Approved Canvass for Voucher Request</h3><div class="sub">Select the approved canvassed items that should be requested for a voucher. After approval, they will appear in Vouchering.</div></div><button class="btn" id="generatePurchaseRequest" type="button">Request Voucher</button></div>${table(['Select','Approved Date','Supplier','Item / Material','Qty','Unit','Amount','Request Status'],body)}`}
+  function purchaseRequestTable(){let rows=purchaseRequestRows(projectId),body=rows.map(x=>{let status=x.request?'<span class="pill '+(x.request.approvalStatus==='Approved'?'done':'')+'">'+esc(x.request.approvalStatus)+'</span>':'<span class="pill">Ready</span>';return [`<input type="checkbox" data-pr-line="${esc(x.canvass.id+'|'+x.index)}" title="Select for Purchase Request PDF${x.request?' (existing '+esc(x.request.approvalStatus)+' request)':''}">`,esc(x.canvass.approvedAt||x.canvass.date||''),esc(x.canvass.supplier),esc(x.line.item),num(x.line.qty),esc(x.line.unit||''),`<b class="negative">${money(x.line.amount)}</b>`,status]});return `<div class="toolbar" style="justify-content:space-between;align-items:flex-start;margin-bottom:12px"><div><h3 style="margin:0">Approved Canvass for Voucher Request</h3><div class="sub">Select approved canvassed items to request a voucher or generate a Purchase Request PDF. Items with an existing request can still be selected for PDF printing.</div></div><div class="toolbar" style="gap:8px;justify-content:flex-end;flex-wrap:wrap"><button class="btn" id="generatePurchaseRequest" type="button">Request Voucher</button></div></div>${table(['Select','Approved Date','Supplier','Item / Material','Qty','Unit','Amount','Request Status'],body)}`}
   function approvedPurchaseOrderTable(){let rows=db.purchaseRequests.filter(x=>x.project===projectId&&x.approvalStatus==='Approved'),body=rows.map(x=>[esc(x.requestNo||''),esc(x.requestedAt||x.date||''),esc(x.requestedBy||''),purchaseRequestDetails(x),`<b class="negative">${money(x.amount)}</b>`,esc(x.approvedAt||''),`<button class="btn secondary" style="padding:5px 8px" data-po-request="${esc(x.id)}">Generate PO PDF</button>`]);return `<section class="panel"><div class="toolbar" style="justify-content:space-between;margin-bottom:12px"><div><h3 style="margin:0">Approved Purchase Requests</h3><div class="sub">Only approved Purchase Requests can generate a Purchase Order.</div></div><span class="pill">${rows.length} approved</span></div>${table(['PR No.','Requested Date','Requested By','Approved Items','Total Amount','Approved Date','Actions'],body)}</section>`}
   const basePurchaseRequestRecordTable=recordTable;
   recordTable=function(rs){if(tab==='purchaseRequest')return purchaseRequestTable();if(tab==='purchaseOrder')return approvedPurchaseOrderTable();return basePurchaseRequestRecordTable(rs)};
@@ -1561,18 +1561,14 @@ body.dark-mode .kindrich-realtime-indicator{background:#18392f;border-color:#2b6
   openForm=function(type,id){
     baseProjectOpenForm(type,id);
     if(type!=='project')return;
-    const fields=document.getElementById('fields'),tax=fields?.querySelector('[name="taxAmount"]'),budget=fields?.querySelector('[name="budget"]');
+    const fields=document.getElementById('fields'),tax=fields?.querySelector('[name="taxAmount"]');
     if(!fields||!tax)return;
     const existing=id?(db.projects||[]).find(item=>item.id===id)||{}:{};
-    const enabled=existing.taxIncluded===undefined?num(existing.taxAmount)>0:existing.taxIncluded===true;
     tax.removeAttribute('readonly');
-    tax.value=enabled?moneyInputValue(existing.taxAmount||num(budget?.value)/1.12*.06):'';
-    tax.closest('.group')?.insertAdjacentHTML('beforebegin',`<div class="group project-tax-toggle"><label><input type="checkbox" name="taxIncluded" ${enabled?'checked':''}> Tax Included</label><span class="sub">Tax = Project Budget / 1.12 × 6%</span></div>`);
-    const checkbox=fields.querySelector('[name="taxIncluded"]');
-    const syncTax=()=>{if(checkbox?.checked)tax.value=moneyInputValue(num(budget?.value)/1.12*.06);else tax.value=''};
-    checkbox?.addEventListener('change',syncTax);
-    budget?.addEventListener('input',()=>{if(checkbox?.checked)syncTax()});
-    budget?.addEventListener('change',()=>{if(checkbox?.checked)syncTax()});
+    tax.placeholder='Enter tax amount manually';
+    tax.value=existing.taxAmount!=null?moneyInputValue(existing.taxAmount):'';
+    fields.querySelector('.project-tax-toggle')?.remove();
+    fields.querySelector('[name="taxIncluded"]')?.closest('.group')?.remove();
   };
   bindManpowerBulk=function(){
     const table=document.querySelector('#records table'),header=table?.tHead?.rows[0];
@@ -1585,10 +1581,10 @@ body.dark-mode .kindrich-realtime-indicator{background:#18392f;border-color:#2b6
   document.getElementById('form')?.addEventListener('submit',()=>{
     if(formType!=='project')return;
     setTimeout(()=>{
-      const record=(db.projects||[]).find(item=>item.id===editing)||(db.projects||[]).at(-1),checkbox=document.querySelector('[name="taxIncluded"]'),tax=document.querySelector('[name="taxAmount"]');
-      if(!record||!checkbox||!tax)return;
-      record.taxIncluded=checkbox.checked;
-      record.taxAmount=checkbox.checked?num(tax.value):'';
+      const record=(db.projects||[]).find(item=>item.id===editing)||(db.projects||[]).at(-1),tax=document.querySelector('[name="taxAmount"]');
+      if(!record||!tax)return;
+      delete record.taxIncluded;
+      record.taxAmount=num(tax.value);
       save();
     },0);
   },true);
@@ -1761,9 +1757,9 @@ body.dark-mode .actual-profit-card strong.negative{color:#ff9aaa!important}
   db.roles.forEach(role=>{if(Array.isArray(role.tabs)&&!role.tabs.includes('delivery'))role.tabs.push('delivery')});
   const baseApplyDeliveryWorkspace=applyFirebaseWorkspace;
   applyFirebaseWorkspace=function(value){baseApplyDeliveryWorkspace(value);if(!Array.isArray(db.deliveries))db.deliveries=[];db.roles.forEach(role=>{if(Array.isArray(role.tabs)&&!role.tabs.includes('delivery'))role.tabs.push('delivery')})};
-  const deliveryLine=(line={})=>{let items=linked('items',projectId),selected=line.itemId||'',options=['<option value="">Select uploaded item</option>',...items.map(item=>`<option value="${esc(item.id)}" ${selected===item.id?'selected':''}>${esc(item.description)} (${esc(item.unit||'')})</option>`),'<option value="__manual__">Manual item</option>'].join('');return `<div class="canvass-line delivery-line" data-delivery-line><div class="mini"><label>Uploaded Item</label><select class="field" name="deliveryItemId">${options}</select></div><div class="mini"><label>Item / Material</label><input class="field" name="deliveryItem" value="${esc(line.item||'')}" required><small class="sub delivery-conversion-note" data-delivery-conversion></small></div><div class="mini"><label>Qty Delivered</label><input class="field" name="deliveryQty" type="number" min="0" step="any" value="${num(line.qty)||''}" required></div><div class="mini"><label>Unit</label><input class="field" name="deliveryUnit" value="${esc(line.unit||'')}"></div><div class="mini"><label>Unit Cost (₱)</label><input class="field" name="deliveryUnitCost" type="number" min="0" step="any" value="${num(line.unitCost)||''}" required></div><div class="mini"><label>Total Amount (₱)</label><input class="field" name="deliveryAmount" type="number" min="0" step="any" value="${num(line.amount)||''}" readonly></div><div class="mini"><label>Remarks</label><input class="field" name="deliveryLineRemarks" value="${esc(line.remarks||'')}"></div><button type="button" class="btn danger" style="padding:8px" data-remove-delivery-line>Remove</button></div>`};
+  const deliveryLine=(line={})=>{let items=linked('items',projectId),selected=line.itemId||'',options=['<option value="">Select uploaded item</option>',...items.map(item=>`<option value="${esc(item.id)}" ${selected===item.id?'selected':''}>${esc(item.description)} (${esc(item.unit||'')})</option>`),'<option value="__manual__">Manual item</option>'].join('');return `<div class="canvass-line delivery-line" data-delivery-line data-unit-cost="${num(line.unitCost)}" data-amount="${num(line.amount)}"><div class="mini"><label>Uploaded Item</label><select class="field" name="deliveryItemId">${options}</select></div><div class="mini"><label>Item / Material</label><input class="field" name="deliveryItem" value="${esc(line.item||'')}" required><small class="sub delivery-conversion-note" data-delivery-conversion></small></div><div class="mini"><label>Qty Delivered</label><input class="field" name="deliveryQty" type="number" min="0" step="any" value="${num(line.qty)||''}" required></div><div class="mini"><label>Unit</label><input class="field" name="deliveryUnit" value="${esc(line.unit||'')}"></div><div class="mini"><label>Remarks</label><input class="field" name="deliveryLineRemarks" value="${esc(line.remarks||'')}"></div><button type="button" class="btn danger" style="padding:8px" data-remove-delivery-line>Remove</button></div>`};
   function openDeliveryForm(id=null){formType='delivery';editing=id;let existing=id?db.deliveries.find(item=>item.id===id):{},lines=Array.isArray(existing.lines)&&existing.lines.length?existing.lines:[{}],dialog=$('modal').querySelector('.dialog');dialog.classList.add('wide-dialog','delivery-dialog');dialog.classList.remove('delivery-details-dialog');$('form').querySelector('[type=submit]').style.display='';$('form').querySelector('[type=submit]').innerHTML='<i class="bi bi-check2"></i> Save Records';$('modalTitle').textContent=(id?'Edit ':'Add ')+'Delivery';$('fields').innerHTML=`<div class="group"><label>Date</label><input class="field" name="deliveryDate" type="date" value="${esc(existing.date||todayLocal())}" required></div><div class="group"><label>Delivery No. (Optional)</label><input class="field" name="deliveryNo" value="${esc(existing.deliveryNo||'')}"></div><div class="group wide"><label>Delivered By</label><input class="field" name="deliverySupplier" value="${esc(existing.supplier||'')}"></div><div class="group wide"><label>Items Delivered</label><div id="deliveryLines">${lines.map(deliveryLine).join('')}</div><button type="button" class="btn secondary" id="addDeliveryLine">+ Add Item</button><p class="sub" style="margin:6px 0 0">Select an uploaded BOQ item, or choose Manual item for materials not in the uploaded list.</p></div><div class="group wide"><label>Delivery Remarks</label><textarea class="field" name="deliveryRemarks" rows="3">${esc(existing.remarks||'')}</textarea></div>`;$('modal').classList.add('show');bindDeliveryFields()}
-  function bindDeliveryFields(){let box=document.getElementById('deliveryLines');if(!box)return;let sync=(row)=>{let select=row.querySelector('[name="deliveryItemId"]'),item=row.querySelector('[name="deliveryItem"]'),unit=row.querySelector('[name="deliveryUnit"]'),qty=row.querySelector('[name="deliveryQty"]'),unitCost=row.querySelector('[name="deliveryUnitCost"]'),amount=row.querySelector('[name="deliveryAmount"]'),note=row.querySelector('[data-delivery-conversion]'),selected=linked('items',projectId).find(x=>x.id===select.value);if(selected){item.value=selected.description||'';unit.value=selected.unit||selected.uom||selected.poUnit||''}amount.value=(num(qty.value)*num(unitCost.value)).toFixed(2);if(note){let conversions=(db.itemConversions||[]).filter(record=>String(record.project)===String(projectId)&&record.sourceItemId===selected?.id);note.innerHTML=conversions.map(record=>record.conversionType==='cash'?'Conversion: Item to Cash · Cash Amount '+money(record.conversionAmount)+' · Adjustment '+money(Math.max(0,num(record.sourceValue)-num(record.entityAmount??record.conversionAmount))):'Conversion: Item to Item · '+esc(record.destinationDescription||'item')+' · Qty '+num(record.destinationQty)+' '+esc(record.destinationUnit||'')).join('<br>');note.style.display=conversions.length?'block':'none'}};box.onchange=e=>{let row=e.target.closest('[data-delivery-line]');if(row&&e.target.name==='deliveryItemId')sync(row)};box.oninput=e=>{let row=e.target.closest('[data-delivery-line]');if(row&&(e.target.name==='deliveryQty'||e.target.name==='deliveryUnitCost'))sync(row)};box.onclick=e=>{if(e.target.matches('[data-remove-delivery-line]')){let rows=box.querySelectorAll('[data-delivery-line]');if(rows.length>1)e.target.closest('[data-delivery-line]').remove()}};document.getElementById('addDeliveryLine').onclick=()=>box.insertAdjacentHTML('beforeend',deliveryLine({}));box.querySelectorAll('[data-delivery-line]').forEach(row=>sync(row))}
+  function bindDeliveryFields(){let box=document.getElementById('deliveryLines');if(!box)return;let sync=(row)=>{let select=row.querySelector('[name="deliveryItemId"]'),item=row.querySelector('[name="deliveryItem"]'),unit=row.querySelector('[name="deliveryUnit"]'),note=row.querySelector('[data-delivery-conversion]'),selected=linked('items',projectId).find(x=>x.id===select.value);if(selected){item.value=selected.description||'';unit.value=selected.unit||selected.uom||selected.poUnit||''}if(note){let conversions=(db.itemConversions||[]).filter(record=>String(record.project)===String(projectId)&&record.sourceItemId===selected?.id);note.innerHTML=conversions.map(record=>record.conversionType==='cash'?'Conversion: Item to Cash · Cash Amount '+money(record.conversionAmount)+' · Adjustment '+money(Math.max(0,num(record.sourceValue)-num(record.entityAmount??record.conversionAmount))):'Conversion: Item to Item · '+esc(record.destinationDescription||'item')+' · Qty '+num(record.destinationQty)+' '+esc(record.destinationUnit||'')).join('<br>');note.style.display=conversions.length?'block':'none'}};box.onchange=e=>{let row=e.target.closest('[data-delivery-line]');if(row&&e.target.name==='deliveryItemId')sync(row)};box.oninput=()=>{};box.onclick=e=>{if(e.target.matches('[data-remove-delivery-line]')){let rows=box.querySelectorAll('[data-delivery-line]');if(rows.length>1)e.target.closest('[data-delivery-line]').remove()}};document.getElementById('addDeliveryLine').onclick=()=>box.insertAdjacentHTML('beforeend',deliveryLine({}));box.querySelectorAll('[data-delivery-line]').forEach(row=>sync(row))}
   document.head.insertAdjacentHTML('beforeend','<style>.dialog.delivery-dialog{width:min(1250px,calc(100vw - 30px))!important;max-width:1250px!important}.delivery-line{grid-template-columns:2fr .8fr .8fr .8fr 1fr 1fr 1fr auto}.delivery-conversion-note{display:block;margin-top:4px;color:#2878c8;font-size:10px;line-height:1.35}.dark-mode .delivery-conversion-note{color:#74d7ff}@media(max-width:760px){.dialog.delivery-dialog{width:calc(100vw - 20px)!important}.delivery-line{grid-template-columns:1fr 1fr}.delivery-line .mini:first-child,.delivery-line .mini:nth-child(2){grid-column:1/-1}}</style>');
   const baseOpenDeliveryForm=openForm;
   openForm=function(type,id=null){if(type==='delivery'){openDeliveryForm(id);return}baseOpenDeliveryForm(type,id)};
@@ -1940,7 +1936,7 @@ body.dark-mode .actual-profit-card strong.negative{color:#ff9aaa!important}
     });
   };
   const voucheringPagerStyle=document.createElement('style');
-  voucheringPagerStyle.textContent='.vouchering-pager{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:7px}.vouchering-pager span{color:var(--muted);font-size:11px;min-width:72px;text-align:center}.vouchering-pager .btn{min-width:26px;width:26px;height:25px;padding:2px 4px;line-height:1}.vouchering-pager .btn:disabled{opacity:.45;cursor:not-allowed}.scroll table td:last-child>button,.scroll table td:last-child>span{display:inline-flex!important;vertical-align:middle;margin:1px 2px 1px 0;white-space:nowrap}';
+  voucheringPagerStyle.textContent='.vouchering-pager{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:7px}.vouchering-pager span{color:var(--muted);font-size:11px;min-width:72px;text-align:center}.vouchering-pager .btn{min-width:26px;width:26px;height:25px;padding:2px 4px;line-height:1}.vouchering-pager .btn:disabled{opacity:.45;cursor:not-allowed}.scroll table td:last-child>button,.scroll table td:last-child>span{display:inline-flex!important;vertical-align:middle;margin:1px 2px 1px 0;white-space:nowrap}.released-voucher-description{display:block;min-width:320px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}';
   document.head.appendChild(voucheringPagerStyle);
 })();
 </script>
@@ -2017,7 +2013,7 @@ body.dark-mode .actual-profit-card strong.negative{color:#ff9aaa!important}
     'Other Expenses':'Sum of project other expense amounts.',
     'Forward In':'Sum of amounts forwarded into this project.',
     'Forward Out':'Sum of amounts forwarded out of this project.',
-    'Tax Amount':'Tax formula: Project Budget ÷ 1.12 × 6%, when tax is included.',
+    'Tax Amount':'Tax Amount is entered manually for this project.',
     'Amount Payed':'Sum of payment records received for this project.',
     'Remaining Budget':'Project Budget − Tax − Purchase Items − Manpower − Other Expenses − SOP − Retention Held − Item-to-Cash Amount − Forward In + Forward Out.',
     'Total SOP':'Sum of all SOP amounts for this project.'
@@ -2441,12 +2437,12 @@ body.dark-mode .actual-profit-card strong.negative{color:#ff9aaa!important}
   function releasedVouchersForProject(){return (db.vouchering||[]).filter(voucher=>String(voucher.project)===String(projectId)&&voucher.status==='Released')}
   function projectVoucheringTable(){
     const requests=approvedPurchaseRequestsForProject(),vouchers=linked('vouchering',projectId),requestRows=requests.map(request=>{let source=sourceCanvassForRequest(request),voucher=requestVoucher(request);return [voucher?'':`<input type="checkbox" data-voucher-pr value="${esc(request.id)}" ${voucher?'disabled':''}>`,esc(request.requestNo||''),esc(source.supplier||''),requestDetails(request),`<b class="negative">${money(request.amount)}</b>`,esc(request.approvedAt||''),voucher?'<span class="pill done">Voucher Generated</span>':'<span class="pill">Ready</span>',`<button class="btn danger" type="button" data-delete="purchaseRequests:${esc(request.id)}" title="Request delete"><i class="bi bi-trash3" aria-hidden="true"></i></button>`]});
-    const voucherRows=vouchers.map(voucher=>[esc(voucher.date||''),esc(voucher.voucherNo||''),esc(voucher.payee||''),esc(voucher.fundName||''),esc(voucher.description||''),`<b class="negative">${money(voucher.amount)}</b>`,`<span class="pill ${voucher.status==='Released'?'done':voucher.status==='Cancelled'?'over':''}">${esc(voucher.status||'Generated')}</span>`,esc(voucher.releasedBy||''),esc(voucher.remarks||''),`<button class="btn secondary" type="button" data-print-voucher="${esc(voucher.id)}" title="Print voucher">Print</button> ${voucher.status==='Released'?'<span class="pill done">Released</span>':`<button class="btn" type="button" data-release-voucher="${esc(voucher.id)}" title="Release voucher">Release</button>`}`]);
+    const voucherRows=vouchers.map(voucher=>[esc(voucher.date||''),esc(voucher.voucherNo||''),esc(voucher.payee||''),esc(voucher.fundName||''),esc(voucher.description||''),`<b class="negative">${money(voucher.amount)}</b>`,`<span class="pill ${voucher.status==='Released'?'done':voucher.status==='Cancelled'?'over':''}">${esc(voucher.status||'Generated')}</span>`,esc(voucher.releasedBy||''),esc(voucher.remarks||''),`<button class="btn secondary" type="button" data-print-voucher="${esc(voucher.id)}" title="Print voucher" aria-label="Print voucher"><i class="bi bi-printer" aria-hidden="true"></i></button> ${voucher.status==='Released'?'<span class="pill done">Released</span>':`<button class="btn" type="button" data-release-voucher="${esc(voucher.id)}" title="Release voucher" aria-label="Release voucher"><i class="bi bi-box-arrow-up" aria-hidden="true"></i></button>`} <button class="btn danger" type="button" data-delete="vouchering:${esc(voucher.id)}" title="Request delete" aria-label="Request voucher deletion"><i class="bi bi-trash3" aria-hidden="true"></i></button>`]);
     return `<div class="toolbar" style="justify-content:space-between;margin-bottom:12px"><div><h3 style="margin:0">Approved Purchase Requests</h3><div class="sub">Only approved Purchase Requests can be generated as vouchers.</div></div><div class="toolbar"><select class="field" id="voucherFundSelect"><option value="">Select Fund</option><option value="Kindrich Fund">Kindrich Fund</option><option value="Jag Fund">Jag Fund</option></select><button class="btn" type="button" data-generate-vouchers>Generate Voucher</button></div></div>${table(['Select','PR No.','Supplier','Requested Items','Amount','Approved Date','Voucher Status','Actions'],requestRows)}<div style="height:16px"></div><h3>Generated Vouchers</h3>${table(['Voucher Date','Voucher ID No.','Payee','Fund','Description','Amount','Status','Released By','Remarks','Actions'],voucherRows)}`;
   }
   function projectPurchaseOrderTable(){
-    const vouchers=releasedVouchersForProject(),body=vouchers.map(voucher=>[esc(voucher.voucherNo||''),esc(voucher.date||''),esc(voucher.payee||''),esc(voucher.description||''),`<b class="negative">${money(voucher.amount)}</b>`,esc(voucher.releasedAt||''),`<button class="btn secondary" type="button" data-po-voucher="${esc(voucher.id)}" title="Generate purchase order PDF">Generate PO PDF</button>`]);
-    return `<section class="panel"><div class="toolbar" style="justify-content:space-between;margin-bottom:12px"><div><h3 style="margin:0">Released Vouchers for Purchase Order</h3><div class="sub">Only vouchers with Generated status that have been Released can generate a Purchase Order PDF.</div></div><span class="pill">${vouchers.length} released</span></div>${table(['Voucher No.','Voucher Date','Payee','Description','Amount','Released Date','Actions'],body)}</section>`;
+    const vouchers=releasedVouchersForProject(),body=vouchers.map(voucher=>[esc(voucher.voucherNo||''),esc(voucher.date||''),esc(voucher.fundName||''),`<span class="released-voucher-description">${esc(voucher.description||'')}</span>`,`<b class="negative">${money(voucher.amount)}</b>`,esc(voucher.releasedAt||''),`<button class="btn secondary" type="button" data-po-voucher="${esc(voucher.id)}" title="Generate purchase order PDF" aria-label="Generate purchase order PDF"><i class="bi bi-file-earmark-pdf" aria-hidden="true"></i></button> <button class="btn danger" type="button" data-delete="vouchering:${esc(voucher.id)}" title="Request delete" aria-label="Request voucher deletion"><i class="bi bi-trash3" aria-hidden="true"></i></button>`]);
+    return `<section class="panel"><div class="toolbar" style="justify-content:space-between;margin-bottom:12px"><div><h3 style="margin:0">Released Vouchers for Purchase Order</h3><div class="sub">Only vouchers with Generated status that have been Released can generate a Purchase Order PDF.</div></div><span class="pill">${vouchers.length} released</span></div>${table(['Voucher No.','Voucher Date','Fund','Description','Amount','Released Date','Actions'],body)}</section>`;
   }
   const baseRecordTableWithVoucherWorkflow=recordTable;
   recordTable=function(rows){if(tab==='vouchering')return projectVoucheringTable();if(tab==='purchaseOrder')return projectPurchaseOrderTable();return baseRecordTableWithVoucherWorkflow(rows)};
@@ -2521,7 +2517,7 @@ body.dark-mode .actual-profit-card strong.negative{color:#ff9aaa!important}
     if(tab!=='delivery')return;
     const records=document.getElementById('records');if(!records)return;
     const rows=linked('deliveries',projectId).slice().sort((a,b)=>{const time=value=>{const raw=value?.createdAt||value?.addedAt||value?.date||'';const parsed=Date.parse(raw);return Number.isFinite(parsed)?parsed:0};return time(b)-time(a)});
-    records.innerHTML=table(['Date','Delivery No.','Delivered By','Items','Total Qty','Total Amount','Remarks','Actions'],rows.map(record=>{let lines=Array.isArray(record.lines)?record.lines:[],totalQty=lines.reduce((total,line)=>total+num(line.qty),0),totalAmount=lines.reduce((total,line)=>total+num(line.amount||num(line.qty)*num(line.unitCost)),0),items=lines.map(line=>`${esc(line.item)} (${num(line.qty)} ${esc(line.unit||'')})`).join('<br>'),view='<button class="btn secondary" type="button" title="View Details" aria-label="View Details" data-view-delivery="'+esc(record.id)+'"><i class="bi bi-eye" aria-hidden="true"></i></button>';return [esc(record.date||''),esc(record.deliveryNo||''),esc(record.supplier||''),items,totalQty,money(totalAmount),esc(record.remarks||''),view+' '+buttons('delivery',record.id)]}));
+    records.innerHTML=table(['Date','Delivery No.','Delivered By','Items','Total Qty','Remarks','Actions'],rows.map(record=>{let lines=Array.isArray(record.lines)?record.lines:[],totalQty=lines.reduce((total,line)=>total+num(line.qty),0),items=lines.map(line=>`${esc(line.item)} (${num(line.qty)} ${esc(line.unit||'')})`).join('<br>'),view='<button class="btn secondary" type="button" title="View Details" aria-label="View Details" data-view-delivery="'+esc(record.id)+'"><i class="bi bi-eye" aria-hidden="true"></i></button>',print='<button class="btn secondary" type="button" title="Print Delivery Form" aria-label="Print Delivery Form" data-print-delivery="'+esc(record.id)+'"><i class="bi bi-printer" aria-hidden="true"></i></button>';return [esc(record.date||''),esc(record.deliveryNo||''),esc(record.supplier||''),items,totalQty,esc(record.remarks||''),view+' '+print+' '+buttons('delivery',record.id)]}));
     bindActions();
   };
 })();
@@ -2970,8 +2966,8 @@ body.dark-mode .scroll table:has(th.item-col) td:nth-child(10) .pill.over{backgr
 </script>
 <script>
 (function(){
-  function deliveryDialogLine(line){return '<div class="canvass-line delivery-line" data-delivery-line><div class="mini"><label>Item / Material</label><input class="field" name="deliveryItem" value="'+esc(line.item||'')+'" required></div><div class="mini"><label>Qty Delivered</label><input class="field" name="deliveryQty" type="number" min="0" step="any" value="'+num(line.qty)+'" required></div><div class="mini"><label>Unit</label><input class="field" name="deliveryUnit" value="'+esc(line.unit||'')+'"></div><div class="mini"><label>Unit Cost (₱)</label><input class="field" name="deliveryUnitCost" type="number" min="0" step="any" value="'+num(line.unitCost)+'" required></div><div class="mini"><label>Total Amount (₱)</label><input class="field" name="deliveryAmount" type="number" value="'+num(line.amount)+'" readonly></div><div class="mini"><label>Remarks</label><input class="field" name="deliveryLineRemarks" value="'+esc(line.remarks||'')+'"></div></div>'}
-  function bindDeliveryDialogFields(){const box=document.getElementById('deliveryLines');if(!box||box.dataset.dialogCalcBound)return;box.dataset.dialogCalcBound='1';const sync=row=>{const qty=num(row.querySelector('[name="deliveryQty"]')?.value),unitCost=num(row.querySelector('[name="deliveryUnitCost"]')?.value),amount=row.querySelector('[name="deliveryAmount"]');if(amount)amount.value=(qty*unitCost).toFixed(2)};box.addEventListener('input',event=>{if(event.target.matches('[name="deliveryQty"],[name="deliveryUnitCost"]'))sync(event.target.closest('[data-delivery-line]'))});box.querySelectorAll('[data-delivery-line]').forEach(sync)}
+  function deliveryDialogLine(line){return '<div class="canvass-line delivery-line" data-delivery-line data-unit-cost="'+num(line.unitCost)+'" data-amount="'+num(line.amount)+'"><div class="mini"><label>Item / Material</label><input class="field" name="deliveryItem" value="'+esc(line.item||'')+'" required></div><div class="mini"><label>Qty Delivered</label><input class="field" name="deliveryQty" type="number" min="0" step="any" value="'+num(line.qty)+'" required></div><div class="mini"><label>Unit</label><input class="field" name="deliveryUnit" value="'+esc(line.unit||'')+'"></div><div class="mini"><label>Remarks</label><input class="field" name="deliveryLineRemarks" value="'+esc(line.remarks||'')+'"></div></div>'}
+  function bindDeliveryDialogFields(){const box=document.getElementById('deliveryLines');if(!box||box.dataset.dialogCalcBound)return;box.dataset.dialogCalcBound='1'}
   function downloadDeliveryDialogTemplate(){
     const current=[...document.querySelectorAll('#deliveryLines [data-delivery-line]')].map(row=>[String(row.querySelector('[name="deliveryItem"]')?.value||'').trim(),row.querySelector('[name="deliveryQty"]')?.value||'',row.querySelector('[name="deliveryUnit"]')?.value||'',row.querySelector('[name="deliveryUnitCost"]')?.value||'',row.querySelector('[name="deliveryAmount"]')?.value||'',row.querySelector('[name="deliveryLineRemarks"]')?.value||'']).filter(row=>row[0]);
     const itemRows=current.length?current:linked('items',projectId).map(item=>[item.description||'','',item.unit||'','','','']);
@@ -3007,12 +3003,29 @@ body.dark-mode .scroll table:has(th.item-col) td:nth-child(10) .pill.over{backgr
 (function(){
   function printDeliveryRecord(record){
     const lines=Array.isArray(record.lines)?record.lines:[],total=lines.reduce((sum,line)=>sum+num(line.amount||num(line.qty)*num(line.unitCost)),0),rows=lines.map(line=>'<tr><td>'+esc(line.item||'')+'</td><td>'+num(line.qty)+'</td><td>'+esc(line.unit||'')+'</td><td>'+money(line.unitCost)+'</td><td>'+money(line.amount||num(line.qty)*num(line.unitCost))+'</td><td>'+esc(line.remarks||'')+'</td></tr>').join(''),doc='<!doctype html><html><head><meta charset="utf-8"><title>Delivery '+esc(record.deliveryNo||'')+'</title><style>body{font:13px Arial,sans-serif;color:#18283f;margin:30px}h1{margin:0 0 5px;color:#1765bc}.meta{display:grid;grid-template-columns:1fr 1fr;gap:8px 20px;margin:20px 0}.summary{border:1px solid #dbe3eb;background:#f8fafc;padding:12px;margin:15px 0;font-size:16px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #cbd6e2;padding:7px;text-align:left}th{background:#eaf1f8;font-size:11px;text-transform:uppercase}td:nth-child(2),td:nth-child(4),td:nth-child(5){text-align:right}.sign{display:grid;grid-template-columns:1fr 1fr;gap:50px;margin-top:60px}.line{border-top:1px solid #333;padding-top:6px;text-align:center}</style></head><body><h1>KINDRICH Delivery Form</h1><div class="meta"><div><b>Delivery No.:</b> '+esc(record.deliveryNo||'')+'</div><div><b>Date:</b> '+esc(record.date||'')+'</div><div><b>Delivered By:</b> '+esc(record.supplier||'')+'</div><div><b>Project:</b> '+esc(project()?.name||'')+'</div></div><table><thead><tr><th>Item / Material</th><th>Qty</th><th>Unit</th><th>Unit Cost</th><th>Total Amount</th><th>Remarks</th></tr></thead><tbody>'+rows+'</tbody></table><div class="summary"><b>Total Delivery Amount: '+money(total)+'</b></div><p>'+esc(record.remarks||'')+'</p><div class="sign"><div class="line">Delivered By</div><div class="line">Received By</div></div></body></html>',popup=window.open('','_blank');if(!popup){alert('Please allow pop-ups to print the delivery form.');return}popup.document.write(doc);popup.document.close();popup.focus();setTimeout(()=>popup.print(),250)}
+  const basePrintDeliveryRecordWithoutCosts=printDeliveryRecord;
+  printDeliveryRecord=function(record){
+    const nativeOpen=window.open;
+    window.open=function(...args){
+      const popup=nativeOpen.apply(window,args);
+      if(popup?.document){
+        const nativeWrite=popup.document.write.bind(popup.document);
+        popup.document.write=html=>{
+          let compact=html.replace('<th>Unit Cost</th><th>Total Amount</th>','');
+          compact=compact.replace(/(<tr><td>.*?<\/td><td>.*?<\/td><td>.*?<\/td>)<td>.*?<\/td><td>.*?<\/td>(<td>.*?<\/td><\/tr>)/g,'$1$2');
+          nativeWrite(compact);
+        };
+      }
+      return popup;
+    };
+    try{return basePrintDeliveryRecordWithoutCosts(record)}finally{window.open=nativeOpen}
+  };
   function showDeliveryDetails(id){
     const record=linked('deliveries',projectId).find(item=>item.id===id);if(!record)return;
     formType='deliveryView';editing=null;$('modalTitle').textContent='Delivery Details';$('modal').querySelector('.dialog').classList.add('wide-dialog','delivery-details-dialog');$('form').querySelector('[type=submit]').style.display='none';const lines=Array.isArray(record.lines)?record.lines:[];$('fields').innerHTML=table(['Item / Material','Qty','Unit','Unit Cost','Total Amount','Remarks'],lines.map(line=>[esc(line.item||''),num(line.qty),esc(line.unit||''),money(line.unitCost),money(line.amount||num(line.qty)*num(line.unitCost)),esc(line.remarks||'')]));$('modal').classList.add('show')
   }
   const baseDetailWithDeliveryView=detail;
-  detail=function(){baseDetailWithDeliveryView.apply(this,arguments);if(page!=='detail'||tab!=='delivery')return;document.querySelectorAll('[data-view-delivery]').forEach(button=>button.onclick=()=>showDeliveryDetails(button.dataset.viewDelivery))};
+  detail=function(){baseDetailWithDeliveryView.apply(this,arguments);if(page!=='detail'||tab!=='delivery')return;document.querySelectorAll('[data-view-delivery]').forEach(button=>button.onclick=()=>showDeliveryDetails(button.dataset.viewDelivery));document.querySelectorAll('[data-print-delivery]').forEach(button=>button.onclick=()=>{const record=linked('deliveries',projectId).find(item=>item.id===button.dataset.printDelivery);if(record)printDeliveryRecord(record)})};
 })();
 </script>
 <style>
@@ -3201,9 +3214,435 @@ body.dark-mode table tbody tr.pending-delete-row:hover > td{background:#5c303a!i
     if(typeBefore!=='project'||typeof db==='undefined')return;
     const record=editingBefore?(db.projects||[]).find(item=>item.id===editingBefore):(db.projects||[]).at(-1);
     if(!record)return;
-    record.taxPercent=6;
-    record.taxAmount=num(record.budget)/1.12*0.06;
+    const tax=document.querySelector('[name="taxAmount"]');
+    record.taxPercent=0;
+    record.taxAmount=tax?num(tax.value):num(record.taxAmount);
     if(typeof save==='function')save();
+  };
+})();
+</script>
+<script>
+(function(){
+  if(typeof detail!=='function')return;
+  const baseDetailWithTotalProjectCosts=detail;
+  detail=function(){
+    baseDetailWithTotalProjectCosts.apply(this,arguments);
+    if(page!=='detail')return;
+    const p=project(),t=p?totals(p):null,host=document.querySelector('.detail-summary .cards');
+    if(!p||!t||!host)return;
+    const cashout=(db.itemConversions||[]).filter(record=>!record.deleted&&String(record.project)===String(p.id)&&record.conversionType==='cash').reduce((sum,record)=>sum+Math.max(0,num(record.entityAmount??record.conversionAmount)),0)||num(t.cashout);
+    const total=num(t.materials)+num(t.labor)+num(t.other)+num(t.tax)+cashout;
+    const totalSop=linked('sop',p.id).reduce((sum,record)=>sum+num(record.amount),0);
+    const actualEquipment=linked('heavyEquipment',p.id).reduce((sum,record)=>sum+num(record.amount),0);
+    let sopCard=host.querySelector('[data-total-sop-summary]')||[...host.children].find(item=>item.querySelector('label')?.textContent.trim()==='Total SOP');
+    if(!sopCard){
+      sopCard=document.createElement('div');
+      sopCard.className='card';
+      host.append(sopCard);
+    }
+    sopCard.dataset.totalSopSummary='';
+    [...host.children].filter(item=>item!==sopCard&&item.querySelector('label')?.textContent.trim()==='Total SOP').forEach(item=>item.remove());
+    sopCard.title='Total SOP = sum of all SOP amounts recorded for this project.';
+    sopCard.setAttribute('aria-label','Total SOP: '+money(totalSop));
+    sopCard.innerHTML='<label>Total SOP</label><strong class="negative"><span>'+money(totalSop)+'</span></strong><small>Sum of all SOP amounts</small>';
+    let card=host.querySelector('[data-total-project-costs-summary]');
+    if(!card){
+      card=document.createElement('div');
+      card.className='card';
+      card.dataset.totalProjectCostsSummary='';
+      const remaining=host.querySelector('[data-cashout-summary]')||[...host.children].find(item=>item.querySelector('label')?.textContent.trim()==='Remaining Budget');
+      if(remaining)remaining.before(card);else host.append(card);
+    }
+    card.title='Total Project Costs = Actual Purchase Items + Manpower Expenses + Other Expenses + Tax Amount + Cashout Amount.';
+    card.setAttribute('aria-label','Total Project Costs: '+money(total));
+    card.innerHTML='<label>Total Project Costs</label><strong class="negative" style="color:#bd4553!important"><span>'+money(total)+'</span></strong><small>Purchases + manpower + other expenses + tax + cashout</small>';
+    const upsertSummaryCard=(label,value,note,klass='')=>{
+      let item=[...host.children].find(node=>node!==card&&node.querySelector('label')?.textContent.trim()===label);
+      if(!item){item=document.createElement('div');item.className='card';host.append(item)}
+      item.classList.toggle('estimated-summary-card',klass==='estimated');
+      item.title=note;
+      item.setAttribute('aria-label',label+': '+money(value));
+      const tone=label==='Remaining Budget'?'positive':label==='Actual Equipment Expenses'?'':num(value)<0?'negative':'positive';
+      const amountStyle=label==='Remaining Budget'?' style="color:#138060!important"':'';
+      item.innerHTML='<label>'+esc(label)+'</label><strong class="'+tone+'"'+amountStyle+'><span>'+money(value)+'</span></strong><small>'+esc(note)+'</small>';
+    };
+    upsertSummaryCard('Project Budget',num(p.budget),'Contract / project budget.');
+    const totalBoqAmount=linked('items',p.id).filter(item=>!item.deleted).reduce((sum,item)=>sum+(itemPoQty(item)*itemPoMc(item)),0);
+    upsertSummaryCard('Total BOQ Amount',totalBoqAmount,'BOQ Monitoring Total Cost = Qty × Unit Cost.');
+    upsertSummaryCard('Amount Payed',num(t.payed),'Total collected or paid amount recorded for this project.');
+    upsertSummaryCard('Remaining Budget',num(t.balance)-cashout,'Project Budget − tax − project costs − cashout.');
+    upsertSummaryCard('Estimated Material Expenses',num(p.estimatedMaterialExpenses),'Estimated material expenses entered in project settings.','estimated');
+    upsertSummaryCard('Estimated Equipment Expenses',num(p.estimatedEquipmentExpenses),'Estimated equipment expenses entered in project settings.','estimated');
+    upsertSummaryCard('Estimated Manpower',num(p.manpowerBudget),'Estimated manpower budget entered in project settings.','estimated');
+    upsertSummaryCard('Actual Materials Expenses',num(t.materials),'Total actual purchase expense records for this project.');
+    upsertSummaryCard('Actual Equipment Expenses',actualEquipment,'Total Heavy Equipment expense records for this project.');
+    const addEstimateDifference=(label,estimated,actual)=>{
+      const item=[...host.children].find(node=>node.querySelector('label')?.textContent.trim()===label);
+      if(!item)return;
+      const difference=num(estimated)-num(actual);
+      let note=item.querySelector('[data-estimate-difference]');
+      if(!note){note=document.createElement('small');note.dataset.estimateDifference='';item.append(note)}
+      note.className='estimate-difference '+(difference<0?'negative':'positive');
+      note.textContent='Estimated − Actual: '+money(difference);
+    };
+    addEstimateDifference('Manpower Expenses',num(p.manpowerBudget),num(t.labor));
+    addEstimateDifference('Actual Materials Expenses',num(p.estimatedMaterialExpenses),num(t.materials));
+    addEstimateDifference('Actual Equipment Expenses',num(p.estimatedEquipmentExpenses),actualEquipment);
+    const boqPurchaseDifference=[...host.children].find(node=>node.querySelector('label')?.textContent.trim()==='Actual Purchase Items');
+    if(boqPurchaseDifference){
+      let note=boqPurchaseDifference.querySelector('[data-boq-purchase-difference]');
+      if(!note){note=document.createElement('small');note.dataset.estimateDifference='';boqPurchaseDifference.append(note)}
+      const difference=totalBoqAmount-num(t.materials);
+      note.className='estimate-difference '+(difference<0?'negative':'positive');
+      note.textContent='Total BOQ − Actual Purchase: '+money(difference);
+    }
+    const leftLabels=new Set(['Project Budget','Total BOQ Amount','Amount Payed','Remaining Budget','Estimated Material Expenses','Estimated Equipment Expenses','Estimated Manpower','Estimated Actual Profit','Collected vs Expenses Difference']);
+    const leftOrder=['Project Budget','Total BOQ Amount','Amount Payed','Estimated Material Expenses','Estimated Equipment Expenses','Estimated Manpower','Estimated Actual Profit','Collected vs Expenses Difference','Remaining Budget'];
+    const section=document.querySelector('.detail-summary');
+    if(section&&host.parentElement===section){
+      const layout=document.createElement('div'),left=document.createElement('div'),right=document.createElement('div'),leftCards=document.createElement('div'),rightCards=document.createElement('div');
+      layout.className='detail-summary-layout';left.className='detail-summary-left';right.className='detail-summary-right';leftCards.className='cards';rightCards.className='cards';const setSummaryColumns=()=>{const columns=window.matchMedia('(max-width:760px)').matches?'repeat(2,minmax(0,1fr))':'repeat(4,minmax(0,1fr))';leftCards.style.setProperty('grid-template-columns',columns,'important');rightCards.style.setProperty('grid-template-columns',columns,'important')};setSummaryColumns();
+      const items=[...host.children],labelOf=item=>item.querySelector('label')?.textContent.trim()||'';
+      const summaryTooltips={
+        'Project Budget':'Project Budget = amount entered in the project record.',
+        'Total BOQ Amount':'Total BOQ Amount = sum of Total Cost for BOQ Monitoring items (Qty × Unit Cost).',
+        'Amount Payed':'Amount Payed = sum of all payment records for this project.',
+        'Remaining Budget':'Remaining Budget = Project Budget − Tax Amount − Actual Purchase Items − Manpower Expenses − Other Expenses − Total SOP − Cashout Amount − Retention Held − Item-to-Cash Amount − Forward Out + Forward In.',
+        'Estimated Material Expenses':'Estimated Material Expenses = estimate entered in project settings.',
+        'Estimated Equipment Expenses':'Estimated Equipment Expenses = estimate entered in project settings.',
+        'Estimated Manpower':'Estimated Manpower = manpower budget entered in project settings.',
+        'Estimated Actual Profit':'Estimated Actual Profit = Project Budget − Total Project Costs.',
+        'Collected vs Expenses Difference':'Collected vs Expenses Difference = Amount Payed − Total Project Costs.',
+        'Actual Purchase Items':'Actual Purchase Items = sum of Qty × Item Cost from purchase records. Difference = Total BOQ Amount − Actual Purchase Items.',
+        'Manpower Expenses':'Manpower Expenses = sum of approved manpower amounts, using Days × Rate/Day with Vale adjustments when applicable.',
+        'Other Expenses':'Other Expenses = sum of recorded other expense amounts.',
+        'Forward In':'Forward In = sum of amounts forwarded into this project.',
+        'Forward Out':'Forward Out = sum of amounts forwarded out of this project.',
+        'Tax Amount':'Tax Amount = manually entered project tax amount.',
+        'Cashout Amount':'Cashout Amount = total Cash to Entity from item-to-cash conversions; deducted from Remaining Budget.',
+        'Total SOP':'Total SOP = sum of all SOP amounts recorded for this project.',
+        'Actual Materials Expenses':'Actual Materials Expenses = sum of Qty × Item Cost from purchase records.',
+        'Actual Equipment Expenses':'Actual Equipment Expenses = sum of recorded Heavy Equipment expense amounts.',
+        'Total Project Costs':'Total Project Costs = Actual Purchase Items + Manpower Expenses + Other Expenses + Tax Amount + Cashout Amount.'
+      };
+      items.forEach(item=>{const label=labelOf(item);if(summaryTooltips[label]){item.title=summaryTooltips[label];item.dataset.summaryTooltip=summaryTooltips[label]}});
+      leftOrder.forEach(label=>{let item=items.find(node=>labelOf(node)===label);if(item)leftCards.append(item)});
+      const rightOrder=['Manpower Expenses','Actual Materials Expenses','Actual Equipment Expenses','Actual Purchase Items','Other Expenses','Forward In','Forward Out','Tax Amount','Cashout Amount','Total SOP','Total Project Costs'];
+      rightOrder.forEach(label=>{let item=items.find(node=>labelOf(node)===label);if(item)rightCards.append(item)});
+      items.filter(item=>!leftLabels.has(labelOf(item))&&!rightOrder.includes(labelOf(item))&&item!==card).forEach(item=>rightCards.append(item));
+      if(card&&rightCards.contains(card))rightCards.append(card);
+      left.innerHTML='<div class="summary-column-heading"><strong>Project Financial Summary</strong><span>Budget, costs, estimates and outcome</span></div>';
+      right.innerHTML='<div class="summary-column-heading"><strong>Cost Breakdown</strong><span>Actual expenses and adjustments</span></div>';
+      left.append(leftCards);right.append(rightCards);layout.append(left,right);host.replaceWith(layout);
+    }
+    if(!document.getElementById('detail-summary-two-column-style')){
+      const style=document.createElement('style');style.id='detail-summary-two-column-style';style.textContent='.detail-summary-layout{display:grid;grid-template-columns:minmax(620px,1.4fr) minmax(0,1.6fr);gap:14px;align-items:start;margin-bottom:16px}.detail-summary-layout + .records-panel{margin-top:0}.detail-summary-left,.detail-summary-right{border:1px solid var(--line);border-radius:12px;padding:12px;background:var(--surface);box-shadow:var(--shadow)}.detail-summary-right{padding-bottom:18px}.summary-column-heading{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin:0 2px 10px;padding-bottom:8px;border-bottom:1px solid var(--line)}.summary-column-heading strong{font-size:12px;color:var(--ink)}.summary-column-heading span{font-size:10px;color:var(--muted);text-align:right}.detail-summary-layout .cards{gap:9px!important}.detail-summary-layout .card{box-sizing:border-box;min-width:0;overflow:hidden}.detail-summary-layout .card label{display:block;min-height:24px;line-height:1.15;white-space:normal;overflow-wrap:anywhere;word-break:break-word}.detail-summary-layout .card strong{display:block;font-size:clamp(11px,1vw,16px)!important;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.detail-summary-layout .card small{display:block;line-height:1.2;white-space:normal;overflow-wrap:anywhere;word-break:break-word}.detail-summary-layout .card>small:not([data-estimate-difference]){display:none!important}.detail-summary-layout .card .estimate-difference{display:block;font-size:13px!important;font-weight:800;line-height:1.2;margin-top:4px}.detail-summary-layout .card .estimate-difference.positive{color:#138060!important}.detail-summary-layout .card .estimate-difference.negative{color:#bd4553!important}.detail-summary-left .cards{grid-template-columns:repeat(4,minmax(0,1fr))!important}.detail-summary-left .card{min-height:72px}.detail-summary-left .card:nth-child(-n+4){border-top:3px solid var(--blue)}.detail-summary-left .estimated-summary-card{border-left:3px solid var(--purple)}.detail-summary-left .card[aria-label*="Actual Materials"],.detail-summary-left .card[aria-label*="Actual Equipment"]{border-left:3px solid var(--green)}.detail-summary-right .cards{grid-template-columns:repeat(4,minmax(0,1fr))!important}.detail-summary-right .card{min-height:72px}@media(max-width:1150px){.detail-summary-layout{grid-template-columns:minmax(560px,1fr) minmax(0,1.2fr)}.detail-summary-right .cards{grid-template-columns:repeat(2,minmax(0,1fr))!important}}@media(max-width:760px){.detail-summary-layout{grid-template-columns:1fr}.detail-summary-left,.detail-summary-right{padding:10px}.detail-summary-right{padding-bottom:16px}.detail-summary-left .cards,.detail-summary-right .cards{grid-template-columns:repeat(2,minmax(0,1fr))!important}.summary-column-heading{display:block}.summary-column-heading span{display:block;text-align:left;margin-top:3px)}}';document.head.appendChild(style);
+    }
+  };
+  if(typeof page!=='undefined'&&page==='detail'&&typeof render==='function')setTimeout(()=>render(),0);
+})();
+</script>
+<script>
+(function(){
+  if(typeof specs==='undefined'||!Array.isArray(specs.project))return;
+  const fields=[['estimatedMaterialExpenses','Estimated Material Expenses (₱)','number'],['estimatedEquipmentExpenses','Estimated Equipment Expenses (₱)','number']];
+  const insertAt=Math.max(0,specs.project.findIndex(item=>item[0]==='manpowerBudget'));
+  fields.slice().reverse().forEach(field=>{if(!specs.project.some(item=>item[0]===field[0]))specs.project.splice(insertAt,0,field)});
+})();
+</script>
+<script>
+(function(){
+  const addFullCashoutStatus=()=>document.querySelectorAll('select[name="status"]').forEach(select=>{
+    if(![...select.options].some(option=>option.value==='Full Cashout')){
+      const option=document.createElement('option');
+      option.value='Full Cashout';
+      option.textContent='Full Cashout';
+      select.append(option);
+    }
+    if(typeof editing!=='undefined'&&editing&&typeof data==='function'){
+      const projectRecord=(data().projects||[]).find(project=>project.id===editing);
+      if(projectRecord?.status==='Full Cashout')select.value='Full Cashout';
+    }
+  });
+  addFullCashoutStatus();
+  new MutationObserver(addFullCashoutStatus).observe(document.body,{childList:true,subtree:true});
+})();
+</script>
+<script>
+(function(){
+  if(typeof bindCanvassMultiFields!=='function')return;
+  bindCanvassMultiFields=function(){
+    const box=document.getElementById('canvassLines');
+    if(!box)return;
+    const sync=row=>{
+      const item=linked('items',projectId).find(value=>value.id===row.querySelector('[name="lineItemId"]')?.value)||{};
+      const unit=row.querySelector('[name="lineUnit"]'),cost=row.querySelector('[name="lineUnitCost"]'),qty=row.querySelector('[name="lineQty"]'),add=row.querySelector('[name="lineAdditionalAmount"]'),amount=row.querySelector('[name="lineAmount"]');
+      if(item.id&&!unit.value)unit.value=item.unit||'';
+      if(amount)amount.value=moneyInputValue(num(qty?.value)*num(cost?.value)+num(add?.value));
+    };
+    box.onchange=event=>{const row=event.target.closest('[data-line]');if(!row)return;if(event.target.name==='lineItemId'){const item=linked('items',projectId).find(value=>value.id===event.target.value)||{};row.querySelector('[name="lineUnit"]').value=item.unit||''}sync(row)};
+    box.oninput=event=>{const row=event.target.closest('[data-line]');if(row)sync(row)};
+    box.onclick=event=>{if(!event.target.matches('[data-remove-line]'))return;const rows=box.querySelectorAll('[data-line]');if(rows.length>1)event.target.closest('[data-line]').remove()};
+    document.getElementById('addCanvassLine').onclick=()=>{box.insertAdjacentHTML('beforeend',canvassLineForm({}));const rows=box.querySelectorAll('[data-line]');bindMoneyInputs(rows[rows.length-1]);sync(rows[rows.length-1])};
+    box.querySelectorAll('[data-line]').forEach(row=>{bindMoneyInputs(row);sync(row)});
+  };
+  document.getElementById('form')?.addEventListener('submit',event=>{
+    if(typeof formType==='undefined'||formType!=='canvassing')return;
+    const originalItemPoMc=itemPoMc;
+    itemPoMc=()=>0;
+    setTimeout(()=>{itemPoMc=originalItemPoMc},0);
+  },true);
+})();
+</script>
+<script>
+(function(){
+  if(typeof itemRecordRows!=='function')return;
+  itemRecordRows=function(rows){
+    rows=(rows||[]).map(item=>{
+      const conversions=(db.itemConversions||[]).filter(record=>String(record.project)===String(item.project||projectId)&&(record.sourceItemId===item.id||record.destinationItemId===item.id));
+      if(!conversions.length)return item;
+      const notes=conversions.map(record=>record.sourceItemId===item.id?(record.conversionType==='cash'?'Conversion: converted to cash '+money(record.conversionAmount)+' ('+num(record.adjustmentPercent)+'% adjustment)':'Conversion: converted to '+(record.destinationDescription||'item')+' '+num(record.destinationQty)+' '+(record.destinationUnit||'')):'Conversion: received from '+(record.sourceDescription||'item')+' '+num(record.sourceQty)+' '+(record.sourceUnit||'')).filter(Boolean);
+      return {...item,remarks:[item.remarks,...notes].filter(Boolean).join(' | ')};
+    }).filter(itemMatchesSearch);
+    const deliveries=linked('deliveries',projectId),deliveredQty=item=>deliveries.reduce((total,delivery)=>total+(Array.isArray(delivery.lines)?delivery.lines:[]).filter(line=>String(line.itemId||'')===String(item.id||'')||String(line.item||'').trim().toLowerCase()===String(item.description||'').trim().toLowerCase()).reduce((sum,line)=>sum+num(line.qty),0),0),headers=['Item / Material','Qty','Unit Cost','Unit','Total Cost','Actual Qty Purchase','Amount Purchase','Remaining/Difference','Amount Difference','Status','Actual Delivered','Remarks','Actions'],groups={};
+    rows.forEach(item=>{let key=item.category||'Uncategorized';(groups[key]||(groups[key]=[])).push(item)});
+    return Object.keys(groups).flatMap(category=>[
+      `<tr class="category-row"><td colspan="${headers.length+1}"><div class="toolbar" style="justify-content:space-between"><span>${esc(category)}</span><span class="toolbar"><button class="btn secondary" style="padding:5px 8px;text-transform:none;letter-spacing:0;min-width:30px" title="Move category up" aria-label="Move category up" data-move-category="${esc(category)}|up">▲</button><button class="btn secondary" style="padding:5px 8px;text-transform:none;letter-spacing:0;min-width:30px" title="Move category down" aria-label="Move category down" data-move-category="${esc(category)}|down">▼</button><button class="btn secondary" style="padding:5px 8px;text-transform:none;letter-spacing:0" data-edit-category="${esc(category)}">Edit Category</button></span></div></td></tr>`,
+      ...groups[category].map(item=>{
+        let qty=itemPoQty(item),unitCost=itemPoMc(item),actualQty=itemPurchasedQty(item),actualAmount=itemPurchasedAmount(item),plannedTotal=qty*unitCost,qtyDiff=actualQty-qty,amountDiff=actualAmount-plannedTotal,over=qtyDiff>0||amountDiff>0,delivered=deliveredQty(item);
+        return [esc(item.description),qty,money(unitCost),esc(item.unit),money(plannedTotal),'<b>'+actualQty+'</b>','<b class="negative">'+money(actualAmount)+'</b>','<b class="'+(qtyDiff>0?'negative':qtyDiff<0?'positive':'')+'">'+(qtyDiff>0?'+':'')+qtyDiff+'</b>','<b class="'+(amountDiff>0?'negative':amountDiff<0?'positive':'')+'">'+(amountDiff>0?'+':'')+money(amountDiff)+'</b>','<span class="pill '+(over?'over':'done')+'">'+(over?'Over':'Within')+'</span>','<b>'+delivered+'</b>',esc(item.remarks),buttons('items',item.id)];
+      })
+    ]);
+  };
+})();
+</script>
+<script>
+(function(){
+  if(typeof recordTable!=='function')return;
+  const baseRecordTableWithActualDelivered=recordTable;
+  recordTable=function(rows){
+    const html=baseRecordTableWithActualDelivered(rows);
+    if(typeof tab==='undefined'||tab!=='items')return html;
+    return html.replace(/(<th[^>]*>Qty<\/th>)<th[^>]*>Qty Delivered<\/th>(<th[^>]*>Unit Cost)/,'$1$2').replace(/(<th[^>]*>Status<\/th>)(<th[^>]*>Remarks)/,'$1<th class="">Actual Delivered</th>$2');
+  };
+})();
+</script>
+<script>
+(function(){
+  const baseOpenFormManualDelivery=openForm;
+  openForm=function(type,id=null){
+    baseOpenFormManualDelivery(type,id);
+    if(type!=='delivery')return;
+    formType='deliveryManual';
+    const header=document.querySelector('.delivery-edit-table-head');
+    if(header)header.innerHTML='<span>Uploaded Item</span><span>Item / Material</span><span>Qty Delivered</span><span>Unit</span><span>Remarks</span><span>Action</span>';
+  };
+  const style=document.createElement('style');
+  style.textContent='.delivery-edit-table-head,.delivery-edit-table-row{grid-template-columns:minmax(150px,1.15fr) minmax(170px,1.5fr) minmax(105px,.8fr) minmax(75px,.65fr) minmax(170px,1.35fr) minmax(74px,.55fr)!important;min-width:820px!important}';
+  document.head.appendChild(style);
+  document.getElementById('form')?.addEventListener('submit',event=>{
+    if(formType!=='deliveryManual')return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    const fd=new FormData(event.target),rows=[...document.querySelectorAll('[data-delivery-line]')].map(row=>({
+      itemId:String(row.querySelector('[name="deliveryItemId"]')?.value||''),
+      item:String(row.querySelector('[name="deliveryItem"]')?.value||'').trim(),
+      qty:num(row.querySelector('[name="deliveryQty"]')?.value),
+      unit:String(row.querySelector('[name="deliveryUnit"]')?.value||'').trim(),
+      unitCost:num(row.dataset.unitCost),
+      amount:num(row.dataset.amount),
+      remarks:String(row.querySelector('[name="deliveryLineRemarks"]')?.value||'').trim()
+    })).filter(row=>row.item&&row.qty>0);
+    if(!rows.length){alert('Please add at least one delivered item with a quantity.');return}
+    const previous=editing?db.deliveries.find(item=>item.id===editing):null;
+    const record={id:editing||uid(),project:projectId,date:String(fd.get('deliveryDate')||todayLocal()),deliveryNo:String(fd.get('deliveryNo')||'').trim(),supplier:String(fd.get('deliverySupplier')||'').trim(),remarks:String(fd.get('deliveryRemarks')||'').trim(),lines:rows,createdAt:previous?.createdAt||new Date().toISOString()};
+    if(editing){const index=db.deliveries.findIndex(item=>item.id===editing);if(index>=0)db.deliveries[index]=record;writeLog('Update','Delivery',record.deliveryNo||record.date)}else{db.deliveries.push(record);writeLog('Add','Delivery',record.deliveryNo||record.date)}
+    $('modal').classList.remove('show');save();
+  },true);
+})();
+</script>
+<script>
+(function(){
+  db.companySummaryVisibility=db.companySummaryVisibility&&typeof db.companySummaryVisibility==='object'?db.companySummaryVisibility:{};
+  const companySummaryLabels=['Project Budget','Total BOQ Amount','Amount Payed','Remaining Budget','Estimated Material Expenses','Actual Materials Expenses','Estimated Equipment Expenses','Actual Equipment Expenses','Estimated Manpower','Manpower Expenses','Actual Purchase Items','Other Expenses','Forward In','Forward Out','Tax Amount','Cashout Amount','Total SOP','Total Project Costs','Estimated Actual Profit','Collected vs Expenses Difference'];
+  function summaryCompanyId(value){const raw=String(value||'').trim();return companies.find(item=>String(item.id)===raw||String(item.name).trim()===raw)?.id||raw}
+  function normalizeVoucherDescriptionLayout(){document.querySelectorAll('table').forEach(table=>{const headers=[...(table.tHead?.rows[0]?.cells||[])].map(cell=>cell.textContent.trim().toLowerCase()),index=headers.indexOf('description');if(index<0)return;table.querySelectorAll('tbody tr').forEach(row=>row.cells[index]?.classList.add('voucher-description-cell'))})}
+  function amountSummaryAllowed(user){return user?.showAmountSummary!==false}
+  window.canViewAmountSummary=()=>amountSummaryAllowed(typeof currentUser==='function'?currentUser():null);
+  function applyAmountSummaryVisibility(){
+    const allowed=window.canViewAmountSummary(),p=typeof project==='function'?project():null,companyId=summaryCompanyId(p?.company||company),configured=Array.isArray(db.companySummaryVisibility?.[companyId])?new Set(db.companySummaryVisibility[companyId]):null;
+    document.querySelectorAll('.dashboard-summary .card strong,.detail-summary .card strong,.budget-footer strong').forEach(element=>{
+      const card=element.closest('.card,.budget-footer>div'),label=card?.querySelector('label')?.textContent.trim()||'';
+      const fixedDashboardSummary=['Overall Contract Value','Overall Total Project Costs','Overall Remaining Budget','Overall Amount Payed','Uncollected Contract Balance','General Expenses'].includes(label);
+      const companyVisible=Boolean(card?.closest('.dashboard-summary')&&fixedDashboardSummary)||!configured||configured.has(label);
+      if(!element.dataset.amountSummaryMarkup)element.dataset.amountSummaryMarkup=element.innerHTML;
+      if(allowed&&companyVisible){element.innerHTML=element.dataset.amountSummaryMarkup;element.classList.remove('amount-summary-hidden');element.removeAttribute('aria-label');card?.classList.remove('amount-summary-hidden-card','amount-summary-company-hidden')}
+      else{element.innerHTML='<span class="amount-summary-hidden-label">Hidden</span>';element.classList.add('amount-summary-hidden');element.setAttribute('aria-label',companyVisible?'Amount hidden by user permission':'Amount hidden by company configuration');card?.classList.add('amount-summary-hidden-card');card?.classList.remove('amount-summary-company-hidden')}
+    });
+  }
+  window.applyAmountSummaryVisibility=applyAmountSummaryVisibility;
+  const baseConfigurationWithAmountAccess=configuration;
+  configuration=function(){
+    baseConfigurationWithAmountAccess.apply(this,arguments);
+    const anchor=document.getElementById('userCompanyAccessPanel')||document.querySelector('#content .config-layout .panel');
+    if(!anchor||document.getElementById('userAmountSummaryAccessPanel'))return;
+    const users=db.users||[],selected=(users.find(user=>user.id===db.activeUser)||users[0])?.id||'',section=document.createElement('section');
+    section.className='panel';section.id='userAmountSummaryAccessPanel';
+    section.innerHTML='<div class="config-panel-title"><div><h3>Amount Summary Access</h3><p class="sub" style="margin:6px 0 0">Choose whether each user can view financial amount summaries.</p></div></div><div class="config-form"><div class="group"><label>User</label><select class="field" id="userAmountSummaryAccessUser">'+users.map(user=>'<option value="'+esc(user.id)+'" '+(user.id===selected?'selected':'')+'>'+esc(user.username)+'</option>').join('')+'</select></div><label class="check-chip" style="margin-top:12px"><input type="checkbox" id="userCanViewAmountSummaries"><span>Allow this user to view amount summaries</span></label><div class="toolbar" style="justify-content:flex-end;margin-top:12px"><button class="btn" id="saveUserAmountSummaryAccess" type="button">Save Amount Access</button></div></div>';
+    anchor.parentElement.insertBefore(section,anchor.nextSibling);
+    const select=document.getElementById('userAmountSummaryAccessUser'),checkbox=document.getElementById('userCanViewAmountSummaries'),refresh=()=>{const user=users.find(item=>item.id===select.value);checkbox.checked=amountSummaryAllowed(user)};
+    select.onchange=refresh;refresh();
+    document.getElementById('saveUserAmountSummaryAccess').onclick=()=>{const user=db.users.find(item=>item.id===select.value);if(!user)return;user.showAmountSummary=checkbox.checked;writeLog('Update','User Amount Summary Access',user.username+': '+(checkbox.checked?'Visible':'Hidden'));save();applyAmountSummaryVisibility()};
+  };
+  const baseConfigurationWithCompanySummaryAccess=configuration;
+  configuration=function(){
+    baseConfigurationWithCompanySummaryAccess.apply(this,arguments);
+    if(document.getElementById('companySummaryVisibilityPanel'))return;
+    const anchor=document.getElementById('companySettingsPanel')||document.getElementById('userAmountSummaryAccessPanel')||document.querySelector('#content .config-layout .panel');
+    if(!anchor)return;
+    const selected=companies.some(item=>item.id===company)?company:companies[0]?.id||'',section=document.createElement('section');
+    section.className='panel';section.id='companySummaryVisibilityPanel';
+    section.innerHTML='<div class="config-panel-title"><div><h3>Company Project Amount Summaries</h3><p class="sub" style="margin:6px 0 0">Choose the specific amount summaries visible on projects for each company.</p></div></div><div class="config-form"><div class="group"><label>Company</label><select class="field" id="companySummaryVisibilitySelect">'+companies.map(item=>'<option value="'+esc(item.id)+'" '+(item.id===selected?'selected':'')+'>'+esc(item.name)+'</option>').join('')+'</select></div><div class="group" style="margin-top:12px"><label>Project Amount Summaries</label><div class="check-grid" id="companySummaryVisibilityOptions">'+companySummaryLabels.map(label=>'<label class="check-chip"><input type="checkbox" data-company-summary="'+esc(label)+'"><span>'+esc(label)+'</span></label>').join('')+'</div></div><div class="toolbar" style="justify-content:flex-end;margin-top:12px"><button class="btn" id="saveCompanySummaryVisibility" type="button">Save Company Summary Settings</button></div></div>';
+    anchor.parentElement.insertBefore(section,anchor.nextSibling);
+    const select=document.getElementById('companySummaryVisibilitySelect'),options=document.getElementById('companySummaryVisibilityOptions'),refresh=()=>{const list=db.companySummaryVisibility?.[select.value],visible=Array.isArray(list)?new Set(list):new Set(companySummaryLabels);options.querySelectorAll('[data-company-summary]').forEach(input=>input.checked=visible.has(input.dataset.companySummary))};
+    select.onchange=refresh;refresh();
+    document.getElementById('saveCompanySummaryVisibility').onclick=()=>{const id=select.value;db.companySummaryVisibility=db.companySummaryVisibility&&typeof db.companySummaryVisibility==='object'?db.companySummaryVisibility:{};db.companySummaryVisibility[id]=[...options.querySelectorAll('[data-company-summary]:checked')].map(input=>input.dataset.companySummary);writeLog('Update','Company Project Amount Summaries',companies.find(item=>item.id===id)?.name||id);save();applyAmountSummaryVisibility()};
+  };
+  const allCompanyIds=()=>companies.map(item=>item.id),userCompanyIds=user=>{const assigned=Array.isArray(user?.companyAccess)?user.companyAccess:Array.isArray(user?.companies)?user.companies:null;return assigned?.filter(id=>allCompanyIds().includes(id))||allCompanyIds()},currentAllowedCompanyIds=()=>userCompanyIds(typeof currentUser==='function'?currentUser():null);
+  function enforceCompanyAccess(){const allowed=currentAllowedCompanyIds(),selector=document.getElementById('company');if(!allowed.length)return;if(selector){[...selector.options].forEach(option=>{option.hidden=!allowed.includes(option.value);option.disabled=!allowed.includes(option.value)});if(!allowed.includes(company)){company=allowed[0];selector.value=company}}else if(!allowed.includes(company))company=allowed[0]}
+  const baseConfigurationWithUserCompanyAccess=configuration;
+  configuration=function(){
+    baseConfigurationWithUserCompanyAccess.apply(this,arguments);
+    if(document.getElementById('userCompanyAccessPanel'))return;
+    const anchor=document.getElementById('companySettingsPanel')||document.getElementById('userAmountSummaryAccessPanel')||document.querySelector('#content .config-layout .panel');
+    if(!anchor)return;
+    const users=db.users||[],selected=(users.find(user=>user.id===db.activeUser)||users[0])?.id||'',section=document.createElement('section');
+    section.className='panel';section.id='userCompanyAccessPanel';
+    section.innerHTML='<div class="config-panel-title"><div><h3>User Company Access</h3><p class="sub" style="margin:6px 0 0">Choose which companies each user can access.</p></div></div><div class="config-form"><div class="group"><label>User</label><select class="field" id="userCompanyAccessUser">'+users.map(user=>'<option value="'+esc(user.id)+'" '+(user.id===selected?'selected':'')+'>'+esc(user.username)+'</option>').join('')+'</select></div><div class="group" style="margin-top:12px"><label>Allowed Companies</label><div class="check-grid" id="userCompanyAccessOptions">'+companies.map(item=>'<label class="check-chip"><input type="checkbox" data-user-company="'+esc(item.id)+'"><span>'+esc(item.name)+'</span></label>').join('')+'</div></div><div class="toolbar" style="justify-content:flex-end;margin-top:12px"><button class="btn" id="saveUserCompanyAccess" type="button">Save Company Access</button></div></div>';
+    anchor.parentElement.insertBefore(section,anchor.nextSibling);
+    const userSelect=document.getElementById('userCompanyAccessUser'),options=document.getElementById('userCompanyAccessOptions'),refresh=()=>{const user=users.find(item=>item.id===userSelect.value),allowed=new Set(userCompanyIds(user));options.querySelectorAll('[data-user-company]').forEach(input=>input.checked=allowed.has(input.dataset.userCompany))};
+    userSelect.onchange=refresh;refresh();
+    document.getElementById('saveUserCompanyAccess').onclick=()=>{const user=db.users.find(item=>item.id===userSelect.value),selectedCompanies=[...options.querySelectorAll('[data-user-company]:checked')].map(input=>input.dataset.userCompany);if(!user||!selectedCompanies.length){alert('Select at least one company.');return}user.companyAccess=selectedCompanies;writeLog('Update','User Company Access',user.username+': '+selectedCompanies.map(id=>companies.find(item=>item.id===id)?.name||id).join(', '));save();enforceCompanyAccess()};
+  };
+  const amountAccessStyle=document.createElement('style');amountAccessStyle.textContent='.amount-summary-hidden{color:var(--muted)!important;font-size:14px!important;font-weight:700!important}.amount-summary-hidden-label{font-size:14px!important;letter-spacing:.02em}.amount-summary-hidden-card{display:none!important}.voucher-description-cell{white-space:nowrap!important;min-width:320px;max-width:520px;overflow:hidden;text-overflow:ellipsis}';document.head.appendChild(amountAccessStyle);
+  const baseRenderWithAmountAccess=render;
+  render=function(){enforceCompanyAccess();baseRenderWithAmountAccess.apply(this,arguments);enforceCompanyAccess();requestAnimationFrame(()=>{applyAmountSummaryVisibility();normalizeVoucherDescriptionLayout()})};
+  setTimeout(()=>{applyAmountSummaryVisibility();normalizeVoucherDescriptionLayout()},0);
+})();
+</script>
+<script>
+(function(){
+  function generatePurchaseRequestPdf(){
+    const selected=[...document.querySelectorAll('[data-pr-line]:checked')];
+    if(!selected.length){alert('Please select at least one approved canvassed item.');return}
+    const rows=selected.map(input=>{
+      const parts=(input.dataset.prLine||'').split('|'),sourceId=parts[0],lineIndex=num(parts[1]),canvass=(db.canvassing||[]).find(item=>item.id===sourceId),line=canvass?canvassLines(canvass)[lineIndex]:null;
+      if(!canvass||!line)return null;
+      const qty=num(line.qty),unitCost=num(line.unitCost),amount=Number.isFinite(num(line.amount))&&num(line.amount)!==0?num(line.amount):qty*unitCost;
+      return {canvass,line,qty,unitCost,amount};
+    }).filter(Boolean);
+    if(!rows.length){alert('The selected canvassed items could not be found.');return}
+    const currentProject=typeof project==='function'?(project()||{}):{},currentCompany=(companies||[]).find(item=>String(item.id)===String(currentProject.company)||String(item.name)===String(currentProject.company))||(companies||[]).find(item=>String(item.id)===String(company))||{},companyName=currentCompany.name||currentProject.company||'',total=rows.reduce((sum,row)=>sum+row.amount,0),requestDate=todayLocal(),reference='PR-PREVIEW-'+Date.now().toString().slice(-6);
+    const tableRows=rows.map((row,index)=>'<tr><td>'+String(index+1)+'</td><td>'+esc(row.line.item||'')+'</td><td>'+esc(row.canvass.supplier||'')+'</td><td>'+esc(row.line.unit||'')+'</td><td class="number">'+esc(String(row.qty))+'</td><td class="number">'+money(row.unitCost)+'</td><td class="number">'+money(row.amount)+'</td></tr>').join('');
+    const doc='<!doctype html><html><head><meta charset="utf-8"><title>Purchase Request '+esc(reference)+'</title><style>body{font-family:Arial,sans-serif;color:#111;margin:28px;font-size:12px}h1{font-size:20px;margin:0 0 4px;text-align:center}h2{font-size:14px;margin:0 0 18px;text-align:center;font-weight:normal} .meta{display:grid;grid-template-columns:1fr 1fr;gap:6px 24px;margin:0 0 16px}.meta b{display:inline-block;min-width:105px}table{width:100%;border-collapse:collapse;table-layout:fixed}th,td{border:1px solid #777;padding:6px 5px;vertical-align:top}th{background:#eee;text-align:left}th:nth-child(1){width:5%}th:nth-child(2){width:28%}th:nth-child(3){width:20%}th:nth-child(4){width:10%}th:nth-child(5){width:9%}th:nth-child(6){width:14%}th:nth-child(7){width:14%}.number{text-align:right}.total{display:flex;justify-content:flex-end;margin-top:12px;font-size:14px}.signatures{display:grid;grid-template-columns:1fr 1fr;gap:60px;margin-top:55px}.signature{border-top:1px solid #111;padding-top:5px;text-align:center}@media print{body{margin:12mm}button{display:none}}</style></head><body><h1>PURCHASE REQUEST</h1><h2>'+esc(companyName)+'</h2><div class="meta"><div><b>Company Name:</b> '+esc(companyName)+'</div><div><b>Reference:</b> '+esc(reference)+'</div><div><b>Date:</b> '+esc(requestDate)+'</div><div><b>Project:</b> '+esc(currentProject.name||'')+'</div><div><b>Project Code:</b> '+esc(currentProject.code||'')+'</div><div><b>Requested By:</b> '+esc(typeof currentUser==='function'?(currentUser().username||''):'')+'</div><div><b>Items:</b> '+String(rows.length)+'</div></div><table><thead><tr><th>No.</th><th>Item / Material</th><th>Supplier</th><th>Unit</th><th>Qty</th><th>Unit Cost</th><th>Amount</th></tr></thead><tbody>'+tableRows+'</tbody></table><div class="total"><b>Total Purchase Request:&nbsp; '+money(total)+'</b></div><div class="signatures"><div class="signature">Prepared by</div><div class="signature">Approved by</div></div></body></html>';
+    const popup=window.open('','_blank');
+    if(!popup){alert('Please allow pop-ups to generate the printable Purchase Request.');return}
+    popup.document.open();popup.document.write(doc);popup.document.close();popup.focus();setTimeout(()=>popup.print(),300);
+  }
+  window.generatePurchaseRequestPdf=generatePurchaseRequestPdf;
+  function bindPurchaseRequestPdfButton(){
+    if(typeof tab==='undefined'||tab!=='purchaseRequest')return;
+    const requestButton=document.getElementById('generatePurchaseRequest');
+    if(!requestButton||document.getElementById('generatePurchaseRequestPdf'))return;
+    const button=document.createElement('button');
+    button.type='button';button.id='generatePurchaseRequestPdf';button.className='btn secondary';button.innerHTML='<i class="bi bi-file-earmark-pdf" aria-hidden="true"></i> Generate Purchase Request PDF';
+    button.title='Generate a printable Purchase Request from the selected items';button.onclick=generatePurchaseRequestPdf;
+    requestButton.parentElement.appendChild(button);
+  }
+  const baseDetailWithPurchaseRequestPdf=detail;
+  detail=function(){baseDetailWithPurchaseRequestPdf.apply(this,arguments);bindPurchaseRequestPdfButton()};
+  if(typeof page!=='undefined'&&page==='detail'&&typeof render==='function')setTimeout(()=>render(),0);
+})();
+</script>
+<script>
+(function(){
+  const baseDashboardWithOverallFinancialSummary=dashboard;
+  dashboard=function(){
+    baseDashboardWithOverallFinancialSummary.apply(this,arguments);
+    const summary=document.querySelector('.cards.dashboard-summary');
+    if(!summary)return;
+    const ps=projects(),ts=ps.map(item=>totals(item)),contractValue=ps.reduce((sum,item)=>sum+num(item.budget),0),projectCosts=ts.reduce((sum,item)=>sum+num(item.materials)+num(item.labor)+num(item.other)+num(item.tax)+num(item.cashout),0),remainingBudget=ts.reduce((sum,item)=>sum+num(item.balance),0),amountPayed=ts.reduce((sum,item)=>sum+num(item.payed),0);
+    summary.insertAdjacentHTML('afterbegin','<div class="card" data-overall-contract-value-card><label>Overall Contract Value</label><strong class="positive">'+money(contractValue)+'</strong><small>Total Project Budget</small></div><div class="card" data-overall-project-costs-card><label>Overall Total Project Costs</label><strong class="negative">'+money(projectCosts)+'</strong><small>Purchases + manpower + other expenses + tax + cashout</small></div><div class="card" data-overall-remaining-budget-card><label>Overall Remaining Budget</label><strong class="positive">'+money(remainingBudget)+'</strong><small>Total remaining project budgets</small></div><div class="card" data-overall-amount-payed-card><label>Overall Amount Payed</label><strong class="positive">'+money(amountPayed)+'</strong><small>Total payments recorded</small></div>');
+  };
+})();
+</script>
+<script>
+(function(){
+  if(!tabDefs.some(item=>item[0]==='bills')){
+    const deliveryIndex=tabDefs.findIndex(item=>item[0]==='delivery');
+    tabDefs.splice(deliveryIndex<0?tabDefs.length:deliveryIndex+1,0,['bills','Bills']);
+  }
+  function ensureBillsAccess(){
+    db.roles=(db.roles||[]).map(role=>({...role,tabs:Array.isArray(role.tabs)?[...new Set([...role.tabs,'bills'])]:[...new Set(tabDefs.map(item=>item[0]))]}));
+    if(db.companyTabs&&typeof db.companyTabs==='object')Object.keys(db.companyTabs).forEach(id=>{if(Array.isArray(db.companyTabs[id])&&!db.companyTabs[id].includes('bills'))db.companyTabs[id].push('bills')});
+  }
+  ensureBillsAccess();
+  const normalizedBillItem=value=>String(value||'').trim().toLowerCase().replace(/\s+/g,' ');
+  function billDeliveredRows(){
+    const purchaseRecords=linked('purchases',projectId),deliveries=linked('deliveries',projectId),rows=[];
+    deliveries.forEach(delivery=>(Array.isArray(delivery.lines)?delivery.lines:[]).forEach(line=>{
+      const matches=purchaseRecords.filter(purchase=>{const item=purchaseItem(purchase)||{};return line.itemId&&String(purchase.itemId||'')===String(line.itemId)||normalizedBillItem(item.description||purchase.description)===normalizedBillItem(line.item)}).sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))||String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
+      const actualUnitCost=matches.length?num(matches[0].unitCost)||num(itemPoMc(purchaseItem(matches[0]))):num(line.unitCost);
+      rows.push({item:String(line.item||''),qty:num(line.qty),unit:String(line.unit||''),remarks:String(line.remarks||''),actualUnitCost});
+    }));
+    return rows.filter(row=>row.item&&row.qty>0);
+  }
+  function billMarkupPrice(row,markup){return row.actualUnitCost*(1+num(markup)/100)}
+  function renderBillsTab(){
+    const records=document.getElementById('records');if(!records)return;
+    const rows=billDeliveredRows();
+    records.innerHTML='<section class="panel bills-generator-panel"><div class="toolbar" style="justify-content:space-between;align-items:flex-end"><div><h3 style="margin:0">Generate Bills PDF</h3><div class="sub">All delivered items are listed below. The actual purchase price is used for calculation but is never shown in the PDF.</div></div><div class="toolbar bills-generator-actions"><div class="group"><label for="billMarkupPercent">Markup per item (%)</label><input class="field" id="billMarkupPercent" type="number" min="0" step="any" placeholder="Example: 20" style="width:150px"></div><button class="btn" id="generateBillsPdf" type="button"><i class="bi bi-file-earmark-pdf" aria-hidden="true"></i> Generate Bills PDF</button></div></div><div class="sub" style="margin-top:12px">Markup price = actual purchase unit price + selected markup percentage.</div><div id="billsPreview">'+(rows.length?table(['Item / Material','Qty','Unit','Price','Total'],rows.map((row,index)=>[esc(row.item),row.qty,esc(row.unit),'<span data-bill-markup-price="'+index+'">—</span>','<span data-bill-total="'+index+'">—</span>'])):'<div class="empty">No delivered items found for this project.</div>')+'</div><div class="bills-preview-total"><span>Total Bills Amount</span><strong id="billsPreviewTotal">—</strong></div></section>';
+    const markupInput=document.getElementById('billMarkupPercent'),refresh=()=>{const value=markupInput.value.trim(),grandTotal=value===''?'—':money(rows.reduce((sum,row)=>sum+row.qty*billMarkupPrice(row,value),0));rows.forEach((row,index)=>{const price=value===''?'—':money(billMarkupPrice(row,value)),total=value===''?'—':money(row.qty*billMarkupPrice(row,value));const priceCell=document.querySelector('[data-bill-markup-price="'+index+'"]'),totalCell=document.querySelector('[data-bill-total="'+index+'"]');if(priceCell)priceCell.textContent=price;if(totalCell)totalCell.textContent=total});const grandTotalCell=document.getElementById('billsPreviewTotal');if(grandTotalCell)grandTotalCell.textContent=grandTotal};
+    markupInput.oninput=refresh;
+    document.getElementById('generateBillsPdf').onclick=()=>generateBillsPdf();
+  }
+  function generateBillsPdf(){
+    const input=document.getElementById('billMarkupPercent'),raw=input?.value?.trim()||'';
+    if(raw===''||!Number.isFinite(Number(raw))||Number(raw)<0){alert('Please enter the markup percentage before generating the Bills PDF.');input?.focus();return}
+    const markup=Number(raw),rows=billDeliveredRows();
+    if(!rows.length){alert('No delivered items found for this project.');return}
+    const p=project()||{},companyRecord=(companies||[]).find(item=>String(item.id)===String(p.company)||String(item.name)===String(p.company))||(companies||[]).find(item=>String(item.id)===String(company))||{},companyName=companyRecord.name||p.company||'',billDate=todayLocal(),total=rows.reduce((sum,row)=>sum+row.qty*billMarkupPrice(row,markup),0),body=rows.map((row,index)=>{const price=billMarkupPrice(row,markup);return '<tr><td>'+String(index+1)+'</td><td>'+esc(row.item)+'</td><td class="number">'+esc(String(row.qty))+'</td><td>'+esc(row.unit)+'</td><td class="number">'+money(price)+'</td><td class="number">'+money(row.qty*price)+'</td></tr>'}).join('');
+    const doc='<!doctype html><html><head><meta charset="utf-8"><title>Bills - '+esc(p.name||'Project')+'</title><style>body{font:13px Arial,sans-serif;color:#18283f;margin:30px}h1{margin:0 0 5px;font-size:23px;text-align:center}h2{font-size:15px;text-align:center;font-weight:normal;margin:0 0 22px}.meta{display:grid;grid-template-columns:1fr 1fr;gap:7px 24px;margin:18px 0}.meta b{display:inline-block;min-width:105px}table{width:100%;border-collapse:collapse;margin-top:18px}th,td{border:1px solid #cbd6e2;padding:8px 7px;text-align:left;vertical-align:top}th{background:#eaf1f8;font-size:11px;text-transform:uppercase}td.number{text-align:right}.total{display:flex;justify-content:flex-end;margin-top:14px;font-size:16px}.sign{display:grid;grid-template-columns:1fr 1fr;gap:55px;margin-top:65px}.line{border-top:1px solid #333;padding-top:6px;text-align:center}@media print{button{display:none}tr{page-break-inside:avoid}}</style></head><body><button onclick="window.print()">Print / Save as PDF</button><h1>'+esc(companyName)+'</h1><h2>BILLS</h2><div class="meta"><div><b>Company Name:</b> '+esc(companyName)+'</div><div><b>Bill Date:</b> '+esc(billDate)+'</div><div><b>Project:</b> '+esc(p.name||'')+'</div><div><b>Project Code:</b> '+esc(p.code||'')+'</div><div><b>Delivered Items:</b> '+String(rows.length)+'</div></div><table><thead><tr><th>No.</th><th>Item / Material</th><th>Qty</th><th>Unit</th><th>Price</th><th>Total</th></tr></thead><tbody>'+body+'</tbody></table><div class="total"><b>Total Bills Amount:&nbsp; '+money(total)+'</b></div><div class="sign"><div class="line">Prepared By</div><div class="line">Received By</div></div></body></html>';
+    const popup=window.open('','_blank');if(!popup){alert('Please allow pop-ups to generate the Bills PDF.');return}popup.document.open();popup.document.write(doc);popup.document.close();popup.focus();setTimeout(()=>popup.print(),300);
+  }
+  window.generateBillsPdf=generateBillsPdf;
+  const baseApplyBillsWorkspace=applyFirebaseWorkspace;
+  applyFirebaseWorkspace=function(value){baseApplyBillsWorkspace(value);ensureBillsAccess()};
+  const baseDetailWithBills=detail;
+  detail=function(){baseDetailWithBills.apply(this,arguments);if(page!=='detail'||tab!=='bills')return;document.getElementById('addRow')?.remove();renderBillsTab()};
+  const billsStyle=document.createElement('style');billsStyle.textContent='.bills-generator-panel{margin-top:0}.bills-generator-actions{justify-content:flex-end}.bills-generator-actions .group{min-width:150px}.bills-generator-actions label{font-size:11px;font-weight:700;color:var(--muted)}#billsPreview{margin-top:14px}#billsPreview table{white-space:nowrap}.bills-preview-total{display:flex;justify-content:flex-end;align-items:center;gap:12px;margin-top:12px;padding:12px 14px;border:1px solid var(--line);border-radius:9px;background:var(--surface-2);font-weight:700}.bills-preview-total strong{font-size:18px;color:var(--green)}';document.head.appendChild(billsStyle);
+  if(typeof render==='function'&&typeof loggedIn!=='undefined'&&loggedIn)setTimeout(()=>render(),0);
+})();
+</script>
+<script>
+(function(){
+  const removedDashboardSummaryLabels=new Set(['Project Budgets','Tax Amount','Amount Collected','Actual Purchase Items','Manpower Expenses','Other Expenses']);
+  const baseDashboardWithoutSelectedCards=dashboard;
+  dashboard=function(){
+    baseDashboardWithoutSelectedCards.apply(this,arguments);
+    document.querySelectorAll('.dashboard-summary .card').forEach(card=>{const label=card.querySelector('label')?.textContent.trim();if(removedDashboardSummaryLabels.has(label))card.remove()});
+  };
+})();
+</script>
+<script>
+(function(){
+  const baseDashboardWithFixedCompanySummaries=dashboard;
+  dashboard=function(){
+    baseDashboardWithFixedCompanySummaries.apply(this,arguments);
+    const summary=document.querySelector('.cards.dashboard-summary');if(!summary)return;
+    const ps=projects(),contractValue=ps.reduce((sum,item)=>sum+num(item.budget),0),amountPayed=ps.reduce((sum,item)=>sum+num(totals(item).payed),0),uncollected=contractValue-amountPayed,generalExpenses=(typeof generatedExpenseRows==='function'?generatedExpenseRows():[]).reduce((sum,item)=>sum+num(item.amount),0);
+    const uncollectedCard=summary.querySelector('[data-to-be-collected-card],[data-fixed-uncollected-card]');if(uncollectedCard){uncollectedCard.querySelector('strong').textContent=money(uncollected)}else summary.insertAdjacentHTML('beforeend','<div class="card" data-fixed-uncollected-card><label>Uncollected Contract Balance</label><strong class="positive">'+money(uncollected)+'</strong><small>Total contract value minus amount payed</small></div>');
+    const generalCard=summary.querySelector('[data-general-expenses-card],[data-fixed-general-expenses-card]');if(generalCard){generalCard.querySelector('strong').textContent=money(generalExpenses)}else summary.insertAdjacentHTML('beforeend','<div class="card" data-fixed-general-expenses-card><label>General Expenses</label><strong class="negative">'+money(generalExpenses)+'</strong><small>Company general expenses</small></div>');
   };
 })();
 </script>
