@@ -3043,7 +3043,7 @@ body.dark-mode .scroll table:has(th.item-col) td:nth-child(10) .pill.over{backgr
         popup.document.write=html=>{
           let compact=html.replace('<th>Unit Cost</th><th>Total Amount</th>','');
           compact=compact.replace(/(<tr><td>.*?<\/td><td>.*?<\/td><td>.*?<\/td>)<td>.*?<\/td><td>.*?<\/td>(<td>.*?<\/td><\/tr>)/g,'$1$2');
-          compact=compact.replace(/<div class="sign">[\s\S]*?<\/div><\/body>/,'<div class="sign"><div class="line">Release By:</div><div class="line">Date: '+esc(record.date||'')+'</div><div class="line">Driver:</div><div class="line">Prepared By:</div></div></body>');
+          compact=compact.replace(/<div class="sign">[\s\S]*?<\/div><\/body>/,'<div class="sign"><div class="line">Release By:</div><div class="line">Date: '+esc(record.date||'')+'</div><div class="line">Driver:</div><div class="line">Prepared By:</div><div class="line">Received By:</div><div class="line">Received Date: '+esc(record.date||'')+'</div></div></body>');
           nativeWrite(compact);
         };
       }
