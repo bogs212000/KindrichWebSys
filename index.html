@@ -28,6 +28,36 @@
 })();
 </script>
 <script>
+(function(){
+  function normalizeVoucheringActionButtons(){
+    const inVouchering=document.querySelector('#content [data-generate-vouchers]')||document.querySelector('#content [data-print-voucher]');
+    if(!inVouchering)return;
+    const setIcon=(selector,icon,title)=>document.querySelectorAll('#content '+selector).forEach(button=>{
+      button.classList.add('vouchering-icon-action');
+      button.innerHTML='<i class="bi '+icon+'" aria-hidden="true"></i>';
+      button.title=title;
+      button.setAttribute('aria-label',title);
+    });
+    setIcon('[data-print-voucher]','bi-printer','Print voucher');
+    setIcon('[data-release-voucher]','bi-box-arrow-up','Release voucher');
+    setIcon('[data-po-voucher]','bi-file-earmark-pdf','Generate purchase order PDF');
+    setIcon('[data-delete^="vouchering:"]','bi-trash3','Request voucher deletion');
+    setIcon('[data-delete^="purchaseRequests:"]','bi-trash3','Request purchase request deletion');
+    setIcon('[data-delete^="canvassing:"]','bi-trash3','Request purchase order deletion');
+  }
+  const baseRenderForVoucheringIcons=render;
+  render=function(){
+    const result=baseRenderForVoucheringIcons.apply(this,arguments);
+    requestAnimationFrame(normalizeVoucheringActionButtons);
+    return result;
+  };
+  const style=document.createElement('style');
+  style.textContent='.scroll table .vouchering-icon-action{font-size:0!important;min-width:30px!important;width:30px!important;height:28px!important;padding:4px!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;vertical-align:middle}.scroll table .vouchering-icon-action i{font-size:15px!important;line-height:1!important}.scroll table td:last-child .vouchering-icon-action{margin:1px 2px 1px 0!important}';
+  document.head.appendChild(style);
+  if(loggedIn)requestAnimationFrame(normalizeVoucheringActionButtons);
+})();
+</script>
+<script>
 function generateOverallProjectReport(id){
   const p=(db.projects||[]).find(x=>String(x.id)===String(id))||project();if(!p)return;
   const t=totals(p),purchases=linked('purchases',p.id).filter(x=>!x.deleted),manpower=linked('manpower',p.id).filter(x=>!x.deleted),expenses=linked('expenses',p.id).filter(x=>!x.deleted),payed=linked('payed',p.id).filter(x=>!x.deleted),sop=linked('sop',p.id).filter(x=>!x.deleted),cell=value=>String(value??''),rows=(headers,data)=>`<h2>${headers[0]}</h2><table><thead><tr>${headers.slice(1).map(header=>'<th>'+cell(header)+'</th>').join('')}</tr></thead><tbody>${data.length?data.map(row=>'<tr>'+row.map(value=>'<td>'+cell(value)+'</td>').join('')+'</tr>').join(''):'<tr><td colspan="'+(headers.length-1)+'">No records available.</td></tr>'}</tbody></table>`;
@@ -3013,6 +3043,7 @@ body.dark-mode .scroll table:has(th.item-col) td:nth-child(10) .pill.over{backgr
         popup.document.write=html=>{
           let compact=html.replace('<th>Unit Cost</th><th>Total Amount</th>','');
           compact=compact.replace(/(<tr><td>.*?<\/td><td>.*?<\/td><td>.*?<\/td>)<td>.*?<\/td><td>.*?<\/td>(<td>.*?<\/td><\/tr>)/g,'$1$2');
+          compact=compact.replace(/<div class="sign">[\s\S]*?<\/div><\/body>/,'<div class="sign"><div class="line">Release By:</div><div class="line">Date: '+esc(record.date||'')+'</div><div class="line">Driver:</div><div class="line">Prepared By:</div></div></body>');
           nativeWrite(compact);
         };
       }
@@ -3589,29 +3620,33 @@ body.dark-mode table tbody tr.pending-delete-row:hover > td{background:#5c303a!i
   ensureBillsAccess();
   const normalizedBillItem=value=>String(value||'').trim().toLowerCase().replace(/\s+/g,' ');
   function billDeliveredRows(){
-    const purchaseRecords=linked('purchases',projectId),deliveries=linked('deliveries',projectId),rows=[];
+    const purchaseRecords=linked('purchases',projectId),deliveries=linked('deliveries',projectId),grouped=new Map();
     deliveries.forEach(delivery=>(Array.isArray(delivery.lines)?delivery.lines:[]).forEach(line=>{
-      const matches=purchaseRecords.filter(purchase=>{const item=purchaseItem(purchase)||{};return line.itemId&&String(purchase.itemId||'')===String(line.itemId)||normalizedBillItem(item.description||purchase.description)===normalizedBillItem(line.item)}).sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))||String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
-      const actualUnitCost=matches.length?num(matches[0].unitCost)||num(itemPoMc(purchaseItem(matches[0]))):num(line.unitCost);
-      rows.push({item:String(line.item||''),qty:num(line.qty),unit:String(line.unit||''),remarks:String(line.remarks||''),actualUnitCost});
+      const boqItem=linked('items',projectId).find(value=>line.itemId&&String(value.id||'')===String(line.itemId))||linked('items',projectId).find(value=>normalizedBillItem(value.description)===normalizedBillItem(line.item))||{},matches=purchaseRecords.filter(purchase=>{const purchaseItemRecord=purchaseItem(purchase)||{};return line.itemId&&String(purchase.itemId||'')===String(line.itemId)||normalizedBillItem(purchaseItemRecord.description||purchase.description)===normalizedBillItem(line.item)}),actualQty=matches.reduce((sum,purchase)=>sum+num(purchase.qty),0),actualAmount=matches.reduce((sum,purchase)=>sum+purchaseAmount(purchase),0),actualUnitCost=actualQty>0?actualAmount/actualQty:num(line.unitCost);
+      const item=String(line.item||''),unit=String(line.unit||''),key=String(line.itemId||normalizedBillItem(item)+'|'+normalizedBillItem(unit));
+      const existing=grouped.get(key);
+      if(existing)existing.qty+=num(line.qty);else grouped.set(key,{item,qty:num(line.qty),unit,remarks:String(line.remarks||''),boqUnitCost:num(itemPoMc(boqItem)),actualUnitCost});
     }));
-    return rows.filter(row=>row.item&&row.qty>0);
+    return [...grouped.values()].filter(row=>row.item&&row.qty>0);
   }
-  function billMarkupPrice(row,markup){return row.actualUnitCost*(1+num(markup)/100)}
+  function selectedBillPriceSource(){return document.querySelector('[data-bill-price-source]:checked')?.value||'actual'}
+  function billBasePrice(row,source){return source==='boq'?num(row.boqUnitCost):num(row.actualUnitCost)}
+  function billMarkupPrice(row,markup,source=selectedBillPriceSource()){return billBasePrice(row,source)*(1+num(markup)/100)}
   function renderBillsTab(){
     const records=document.getElementById('records');if(!records)return;
     const rows=billDeliveredRows();
     records.innerHTML='<section class="panel bills-generator-panel"><div class="toolbar" style="justify-content:space-between;align-items:flex-end"><div><h3 style="margin:0">Generate Bills PDF</h3><div class="sub">All delivered items are listed below. The actual purchase price is used for calculation but is never shown in the PDF.</div></div><div class="toolbar bills-generator-actions"><div class="group"><label for="billMarkupPercent">Markup per item (%)</label><input class="field" id="billMarkupPercent" type="number" min="0" step="any" placeholder="Example: 20" style="width:150px"></div><button class="btn" id="generateBillsPdf" type="button"><i class="bi bi-file-earmark-pdf" aria-hidden="true"></i> Generate Bills PDF</button></div></div><div class="sub" style="margin-top:12px">Markup price = actual purchase unit price + selected markup percentage.</div><div id="billsPreview">'+(rows.length?table(['Item / Material','Qty','Unit','Price','Total'],rows.map((row,index)=>[esc(row.item),row.qty,esc(row.unit),'<span data-bill-markup-price="'+index+'">—</span>','<span data-bill-total="'+index+'">—</span>'])):'<div class="empty">No delivered items found for this project.</div>')+'</div><div class="bills-preview-total"><span>Total Bills Amount</span><strong id="billsPreviewTotal">—</strong></div></section>';
-    const markupInput=document.getElementById('billMarkupPercent'),refresh=()=>{const value=markupInput.value.trim(),grandTotal=value===''?'—':money(rows.reduce((sum,row)=>sum+row.qty*billMarkupPrice(row,value),0));rows.forEach((row,index)=>{const price=value===''?'—':money(billMarkupPrice(row,value)),total=value===''?'—':money(row.qty*billMarkupPrice(row,value));const priceCell=document.querySelector('[data-bill-markup-price="'+index+'"]'),totalCell=document.querySelector('[data-bill-total="'+index+'"]');if(priceCell)priceCell.textContent=price;if(totalCell)totalCell.textContent=total});const grandTotalCell=document.getElementById('billsPreviewTotal');if(grandTotalCell)grandTotalCell.textContent=grandTotal};
-    markupInput.oninput=refresh;
+    const actions=records.querySelector('.bills-generator-actions'),sourceBox=document.createElement('div');sourceBox.className='group bills-price-source';sourceBox.innerHTML='<label>Price Source</label><div class="toolbar" style="gap:10px"><label><input type="checkbox" data-bill-price-source value="boq"> BOQ</label><label><input type="checkbox" data-bill-price-source value="actual" checked> Actual</label></div>';actions?.insertBefore(sourceBox,actions.firstElementChild);const sourceNote=records.querySelector('.bills-generator-panel > .sub');if(sourceNote)sourceNote.textContent='Price = selected BOQ or Actual unit price + markup percentage.';
+    const markupInput=document.getElementById('billMarkupPercent'),refresh=()=>{const value=markupInput.value.trim(),source=selectedBillPriceSource(),grandTotal=value===''?'—':money(rows.reduce((sum,row)=>sum+row.qty*billMarkupPrice(row,value,source),0));rows.forEach((row,index)=>{const price=value===''?'—':money(billMarkupPrice(row,value,source)),total=value===''?'—':money(row.qty*billMarkupPrice(row,value,source));const priceCell=document.querySelector('[data-bill-markup-price="'+index+'"]'),totalCell=document.querySelector('[data-bill-total="'+index+'"]');if(priceCell)priceCell.textContent=price;if(totalCell)totalCell.textContent=total});const grandTotalCell=document.getElementById('billsPreviewTotal');if(grandTotalCell)grandTotalCell.textContent=grandTotal};
+    markupInput.oninput=refresh;sourceBox.querySelectorAll('[data-bill-price-source]').forEach(input=>input.onchange=()=>{if(input.checked)sourceBox.querySelectorAll('[data-bill-price-source]').forEach(other=>{if(other!==input)other.checked=false});else if(!sourceBox.querySelector('[data-bill-price-source]:checked'))input.checked=true;refresh()});refresh();
     document.getElementById('generateBillsPdf').onclick=()=>generateBillsPdf();
   }
   function generateBillsPdf(){
     const input=document.getElementById('billMarkupPercent'),raw=input?.value?.trim()||'';
     if(raw===''||!Number.isFinite(Number(raw))||Number(raw)<0){alert('Please enter the markup percentage before generating the Bills PDF.');input?.focus();return}
-    const markup=Number(raw),rows=billDeliveredRows();
+    const markup=Number(raw),source=selectedBillPriceSource(),rows=billDeliveredRows();
     if(!rows.length){alert('No delivered items found for this project.');return}
-    const p=project()||{},companyRecord=(companies||[]).find(item=>String(item.id)===String(p.company)||String(item.name)===String(p.company))||(companies||[]).find(item=>String(item.id)===String(company))||{},companyName=companyRecord.name||p.company||'',billDate=todayLocal(),total=rows.reduce((sum,row)=>sum+row.qty*billMarkupPrice(row,markup),0),body=rows.map((row,index)=>{const price=billMarkupPrice(row,markup);return '<tr><td>'+String(index+1)+'</td><td>'+esc(row.item)+'</td><td class="number">'+esc(String(row.qty))+'</td><td>'+esc(row.unit)+'</td><td class="number">'+money(price)+'</td><td class="number">'+money(row.qty*price)+'</td></tr>'}).join('');
+    const p=project()||{},companyRecord=(companies||[]).find(item=>String(item.id)===String(p.company)||String(item.name)===String(p.company))||(companies||[]).find(item=>String(item.id)===String(company))||{},companyName=companyRecord.name||p.company||'',billDate=todayLocal(),total=rows.reduce((sum,row)=>sum+row.qty*billMarkupPrice(row,markup,source),0),body=rows.map((row,index)=>{const price=billMarkupPrice(row,markup,source);return '<tr><td>'+String(index+1)+'</td><td>'+esc(row.item)+'</td><td class="number">'+esc(String(row.qty))+'</td><td>'+esc(row.unit)+'</td><td class="number">'+money(price)+'</td><td class="number">'+money(row.qty*price)+'</td></tr>'}).join('');
     const doc='<!doctype html><html><head><meta charset="utf-8"><title>Bills - '+esc(p.name||'Project')+'</title><style>body{font:13px Arial,sans-serif;color:#18283f;margin:30px}h1{margin:0 0 5px;font-size:23px;text-align:center}h2{font-size:15px;text-align:center;font-weight:normal;margin:0 0 22px}.meta{display:grid;grid-template-columns:1fr 1fr;gap:7px 24px;margin:18px 0}.meta b{display:inline-block;min-width:105px}table{width:100%;border-collapse:collapse;margin-top:18px}th,td{border:1px solid #cbd6e2;padding:8px 7px;text-align:left;vertical-align:top}th{background:#eaf1f8;font-size:11px;text-transform:uppercase}td.number{text-align:right}.total{display:flex;justify-content:flex-end;margin-top:14px;font-size:16px}.sign{display:grid;grid-template-columns:1fr 1fr;gap:55px;margin-top:65px}.line{border-top:1px solid #333;padding-top:6px;text-align:center}@media print{button{display:none}tr{page-break-inside:avoid}}</style></head><body><button onclick="window.print()">Print / Save as PDF</button><h1>'+esc(companyName)+'</h1><h2>BILLS</h2><div class="meta"><div><b>Company Name:</b> '+esc(companyName)+'</div><div><b>Bill Date:</b> '+esc(billDate)+'</div><div><b>Project:</b> '+esc(p.name||'')+'</div><div><b>Project Code:</b> '+esc(p.code||'')+'</div><div><b>Delivered Items:</b> '+String(rows.length)+'</div></div><table><thead><tr><th>No.</th><th>Item / Material</th><th>Qty</th><th>Unit</th><th>Price</th><th>Total</th></tr></thead><tbody>'+body+'</tbody></table><div class="total"><b>Total Bills Amount:&nbsp; '+money(total)+'</b></div><div class="sign"><div class="line">Prepared By</div><div class="line">Received By</div></div></body></html>';
     const popup=window.open('','_blank');if(!popup){alert('Please allow pop-ups to generate the Bills PDF.');return}popup.document.open();popup.document.write(doc);popup.document.close();popup.focus();setTimeout(()=>popup.print(),300);
   }
@@ -3621,6 +3656,7 @@ body.dark-mode table tbody tr.pending-delete-row:hover > td{background:#5c303a!i
   const baseDetailWithBills=detail;
   detail=function(){baseDetailWithBills.apply(this,arguments);if(page!=='detail'||tab!=='bills')return;document.getElementById('addRow')?.remove();renderBillsTab()};
   const billsStyle=document.createElement('style');billsStyle.textContent='.bills-generator-panel{margin-top:0}.bills-generator-actions{justify-content:flex-end}.bills-generator-actions .group{min-width:150px}.bills-generator-actions label{font-size:11px;font-weight:700;color:var(--muted)}#billsPreview{margin-top:14px}#billsPreview table{white-space:nowrap}.bills-preview-total{display:flex;justify-content:flex-end;align-items:center;gap:12px;margin-top:12px;padding:12px 14px;border:1px solid var(--line);border-radius:9px;background:var(--surface-2);font-weight:700}.bills-preview-total strong{font-size:18px;color:var(--green)}';document.head.appendChild(billsStyle);
+  const billPriceStyle=document.createElement('style');billPriceStyle.textContent='.bills-price-source{min-width:145px}.bills-price-source>label{display:block}.bills-price-source .toolbar label{font-weight:600;color:var(--text);font-size:13px;white-space:nowrap}.bills-price-source input{accent-color:var(--accent)}';document.head.appendChild(billPriceStyle);
   if(typeof render==='function'&&typeof loggedIn!=='undefined'&&loggedIn)setTimeout(()=>render(),0);
 })();
 </script>
@@ -3644,6 +3680,321 @@ body.dark-mode table tbody tr.pending-delete-row:hover > td{background:#5c303a!i
     const uncollectedCard=summary.querySelector('[data-to-be-collected-card],[data-fixed-uncollected-card]');if(uncollectedCard){uncollectedCard.querySelector('strong').textContent=money(uncollected)}else summary.insertAdjacentHTML('beforeend','<div class="card" data-fixed-uncollected-card><label>Uncollected Contract Balance</label><strong class="positive">'+money(uncollected)+'</strong><small>Total contract value minus amount payed</small></div>');
     const generalCard=summary.querySelector('[data-general-expenses-card],[data-fixed-general-expenses-card]');if(generalCard){generalCard.querySelector('strong').textContent=money(generalExpenses)}else summary.insertAdjacentHTML('beforeend','<div class="card" data-fixed-general-expenses-card><label>General Expenses</label><strong class="negative">'+money(generalExpenses)+'</strong><small>Company general expenses</small></div>');
   };
+})();
+</script>
+<script>
+(function(){
+  const baseProjectListWithBoqAmount=projectList;
+  projectList=function(query){
+    baseProjectListWithBoqAmount.apply(this,arguments);
+    document.querySelectorAll('#projectCards .project-card').forEach(card=>{
+      const id=card.querySelector('[data-project]')?.dataset.project;
+      const stats=card.querySelector('.project-card-stats');
+      if(!id||!stats||stats.querySelector('[data-project-card-boq]'))return;
+      const totalBoqAmount=linked('items',id).filter(item=>!item.deleted).reduce((sum,item)=>sum+itemPoQty(item)*itemPoMc(item),0);
+      const stat=document.createElement('div');
+      stat.dataset.projectCardBoq='';
+      stat.innerHTML='<span>Total BOQ Amount</span><b>'+money(totalBoqAmount)+'</b>';
+      stats.insertBefore(stat,stats.firstElementChild);
+    });
+  };
+  if(typeof page!=='undefined'&&page==='projects'&&loggedIn)requestAnimationFrame(()=>projectList(document.getElementById('search')?.value||''));
+})();
+</script>
+<script>
+(function(){
+  if(typeof specs==='undefined'||!Array.isArray(specs.purchases))return;
+  if(!specs.purchases.some(field=>field[0]==='purchasedBy')){
+    specs.purchases.splice(4,0,['purchasedBy','Purchased By','text']);
+  }
+})();
+</script>
+<script>
+(function(){
+  const baseRecordTableWithPurchasedBy=recordTable;
+  recordTable=function(rows){
+    const html=baseRecordTableWithPurchasedBy.apply(this,arguments);
+    if(tab!=='purchases')return html;
+    const box=document.createElement('div');
+    box.innerHTML=html;
+    const purchaseTable=box.querySelector('table');
+    if(!purchaseTable)return html;
+    const headers=purchaseTable.tHead?.rows[0]?.cells||[];
+    const remarksIndex=[...headers].findIndex(cell=>cell.textContent.trim()==='Remarks');
+    if(remarksIndex<0||[...headers].some(cell=>cell.textContent.trim()==='Purchased By'))return box.innerHTML;
+    const header=document.createElement('th');
+    header.textContent='Purchased By';
+    headers[remarksIndex].before(header);
+    [...purchaseTable.tBodies[0].rows].forEach(row=>{
+      if(row.classList.contains('purchase-date-group')){
+        const groupCell=row.cells[0];
+        if(groupCell)groupCell.colSpan=Number(groupCell.colSpan||1)+1;
+        return;
+      }
+      const id=row.querySelector('[data-purchase-select]')?.value;
+      const purchase=(db.purchases||[]).find(item=>String(item.id)===String(id));
+      const cell=document.createElement('td');
+      cell.textContent=purchase?.purchasedBy||'';
+      const remarksCell=row.cells[remarksIndex+1]||row.cells[row.cells.length-2];
+      if(remarksCell)remarksCell.before(cell);else row.appendChild(cell);
+    });
+    return box.innerHTML;
+  };
+})();
+</script>
+<script>
+(function(){
+  const nativeOpen=window.open;
+  window.open=function(){
+    const popup=nativeOpen.apply(window,arguments);
+    if(!popup?.document)return popup;
+    const nativeWrite=popup.document.write.bind(popup.document);
+    popup.document.write=function(html){
+      let output=String(html||'');
+      if(/<h1>\s*KINDRICH VOUCHER\s*<\/h1>/i.test(output)){
+        output=output.replace(/<table\b[\s\S]*?<\/table>/i,'');
+      }
+      return nativeWrite(output);
+    };
+    return popup;
+  };
+})();
+</script>
+<script>
+(function(){
+  const supplierOptions=(selected='')=>{
+    const suppliers=(db.suppliers||[]).filter(item=>String(item.name||'').trim());
+    return '<option value="">Select supplier</option>'+suppliers.map(item=>`<option value="${esc(item.name)}" ${String(item.name)===String(selected)?'selected':''}>${esc(item.name)}</option>`).join('')+'<option value="__manual__" '+(selected&&!suppliers.some(item=>String(item.name)===String(selected))?'selected':'')+'>Manual entry</option>';
+  };
+  const baseCanvassLineForm=canvassLineForm;
+  canvassLineForm=function(line={}){
+    const html=baseCanvassLineForm.apply(this,arguments);
+    const wrapper=document.createElement('div');
+    wrapper.innerHTML=html;
+    const row=wrapper.firstElementChild;
+    if(!row||row.querySelector('[name="lineSupplier"]'))return html;
+    const selected=String(line.supplier||'').trim();
+    const mini=document.createElement('div');
+    mini.className='mini line-supplier-field';
+    mini.innerHTML='<label>Supplier</label><select class="field" name="lineSupplier" required>'+supplierOptions(selected)+'</select><input class="field line-supplier-manual" name="lineSupplierManual" placeholder="Enter supplier name" value="'+esc(selected&&!((db.suppliers||[]).some(item=>String(item.name||'')===selected))?selected:'')+'" style="display:none">';
+    row.insertBefore(mini,row.children[1]||null);
+    return wrapper.innerHTML;
+  };
+  function bindLineSuppliers(){
+    document.querySelectorAll('#canvassLines [data-line]').forEach(row=>{
+      const select=row.querySelector('[name="lineSupplier"]'),manual=row.querySelector('[name="lineSupplierManual"]');
+      if(!select||!manual||select.dataset.bound)return;
+      select.dataset.bound='1';
+      const sync=()=>{const isManual=select.value==='__manual__';manual.style.display=isManual?'':'none';manual.required=isManual;if(!isManual)manual.value=''};
+      select.addEventListener('change',sync);sync();
+    });
+  }
+  const baseOpenCanvassFormWithLineSuppliers=openCanvassForm;
+  openCanvassForm=function(id){
+    baseOpenCanvassFormWithLineSuppliers.apply(this,arguments);
+    const fields=document.getElementById('fields');
+    if(!fields)return;
+    fields.querySelector('[name="supplier"]')?.closest('.group')?.remove();
+    fields.querySelector('[name="supplierManual"]')?.closest('.group')?.remove();
+    let hidden=fields.querySelector('[name="supplier"]');
+    if(!hidden){hidden=document.createElement('input');hidden.type='hidden';hidden.name='supplier';fields.appendChild(hidden)}
+    bindLineSuppliers();
+    const existing=id?db.canvassing.find(item=>item.id===id):null;
+    if(existing?.supplier){
+      document.querySelectorAll('#canvassLines [data-line]').forEach(row=>{
+        const select=row.querySelector('[name="lineSupplier"]'),manual=row.querySelector('[name="lineSupplierManual"]');
+        if(!select||select.value)return;
+        const hasOption=[...select.options].some(option=>option.value===existing.supplier);
+        select.value=hasOption?existing.supplier:'__manual__';
+        if(!hasOption&&manual){manual.value=existing.supplier;manual.style.display='';manual.required=true}
+      });
+    }
+  };
+  document.getElementById('form')?.addEventListener('submit',event=>{
+    if(typeof formType==='undefined'||formType!=='canvassing'||!document.querySelector('[data-canvass-lines]'))return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    const fd=new FormData(event.target),previous=editing?db.canvassing.find(item=>item.id===editing):null;
+    const lines=[...document.querySelectorAll('#canvassLines [data-line]')].map(row=>{
+      const item=linked('items',projectId).find(value=>value.id===row.querySelector('[name="lineItemId"]')?.value)||{},choice=String(row.querySelector('[name="lineSupplier"]')?.value||''),supplier=choice==='__manual__'?String(row.querySelector('[name="lineSupplierManual"]')?.value||'').trim():choice,qty=num(row.querySelector('[name="lineQty"]')?.value),unitCost=num(row.querySelector('[name="lineUnitCost"]')?.value),additionalAmount=num(row.querySelector('[name="lineAdditionalAmount"]')?.value),amount=qty*unitCost+additionalAmount;
+      return {itemId:String(row.querySelector('[name="lineItemId"]')?.value||''),item:item.description||'',supplier,qty,unit:String(row.querySelector('[name="lineUnit"]')?.value||item.unit||''),unitCost,additionalAmount,amount,additionalRemarks:String(row.querySelector('[name="lineAdditionalRemarks"]')?.value||'').trim(),remarks:String(row.querySelector('[name="lineRemarks"]')?.value||'').trim()};
+    }).filter(line=>line.itemId||line.item||line.qty||line.unitCost||line.additionalAmount||line.supplier);
+    if(!lines.length){alert('Please add at least one item to canvass.');return}
+    if(lines.some(line=>!line.supplier)){alert('Please select or enter a supplier for every item.');return}
+    const record={id:editing||uid(),project:projectId,date:String(fd.get('date')||todayLocal()).trim(),supplier:[...new Set(lines.map(line=>line.supplier).filter(Boolean))].join(', '),remarks:String(fd.get('remarks')||'').trim(),lines,amount:lines.reduce((sum,line)=>sum+num(line.amount),0),approvalStatus:previous?.approvalStatus||'Draft',requestedAt:previous?.requestedAt||'',approvedAt:previous?.approvedAt||''};
+    if(editing){const index=db.canvassing.findIndex(item=>item.id===editing);if(index>=0)db.canvassing[index]=record;writeLog('Update','Canvassing',record.supplier)}else{db.canvassing.push(record);writeLog('Add','Canvassing',record.supplier)}
+    document.getElementById('modal').classList.remove('show');
+    save();
+  },true);
+  canvassDetails=function(record){
+    const lines=canvassLines(record);
+    return '<div style="min-width:360px">'+lines.map(line=>'<div><b>'+esc(line.item)+'</b>'+(line.supplier?'<div class="sub">Supplier: '+esc(line.supplier)+'</div>':'')+' - '+num(line.qty)+' '+esc(line.unit)+' x '+money(line.unitCost)+(num(line.additionalAmount)?' + '+money(line.additionalAmount):'')+' = <b>'+money(line.amount)+'</b>'+(line.additionalRemarks?'<div class="sub">'+esc(line.additionalRemarks)+'</div>':'')+(line.remarks?'<div class="sub">'+esc(line.remarks)+'</div>':'')+'</div>').join('<hr style="border:0;border-top:1px solid #e5edf5;margin:7px 0">')+'</div>';
+  };
+  const style=document.createElement('style');
+  style.textContent='.canvass-line .line-supplier-field{min-width:170px}.canvass-line .line-supplier-manual{margin-top:5px}.canvass-line:has(.line-supplier-field){grid-template-columns:2fr 1.2fr .8fr .8fr 1fr 1fr 1fr auto}@media(max-width:1050px){.canvass-line:has(.line-supplier-field){grid-template-columns:repeat(2,minmax(0,1fr))}.canvass-line:has(.line-supplier-field) .line-notes{grid-column:1/-1}}';
+  document.head.appendChild(style);
+})();
+</script>
+<script>
+(function(){
+  function rfqItems(){
+    return linked('canvassing',projectId).flatMap(record=>canvassLines(record).map(line=>({
+      item:String(line.item||''),supplier:String(line.supplier||record.supplier||''),qty:num(line.qty),unit:String(line.unit||''),unitCost:num(line.unitCost),date:String(record.date||''),remarks:String(line.remarks||'')
+    }))).filter(row=>row.item&&row.qty>0);
+  }
+  function closeRfqDialog(){document.getElementById('rfqModal')?.remove()}
+  function refreshRfqTotals(){
+    document.querySelectorAll('#rfqModal [data-rfq-row]').forEach(row=>{
+      const cost=num(row.dataset.rfqUnitCost),qty=num(row.dataset.rfqQty),markup=num(row.querySelector('[data-rfq-markup]')?.value),price=cost*(1+markup/100),total=qty*price;
+      const priceCell=row.querySelector('[data-rfq-price]'),totalCell=row.querySelector('[data-rfq-total]');
+      if(priceCell)priceCell.textContent=money(price);
+      if(totalCell)totalCell.textContent=money(total);
+    });
+    const total=[...document.querySelectorAll('#rfqModal [data-rfq-total]')].reduce((sum,cell)=>sum+num(cell.textContent.replace(/[₱,]/g,'')),0);
+    const summary=document.querySelector('#rfqModal [data-rfq-grand-total]');if(summary)summary.textContent=money(total);
+  }
+  function printRfq(){
+    const rows=[...document.querySelectorAll('#rfqModal [data-rfq-row]')].map(row=>({item:row.dataset.rfqItem,supplier:row.dataset.rfqSupplier,qty:num(row.dataset.rfqQty),unit:row.dataset.rfqUnit,markup:num(row.querySelector('[data-rfq-markup]')?.value),price:num(row.querySelector('[data-rfq-price]')?.textContent.replace(/[₱,]/g,'')),total:num(row.querySelector('[data-rfq-total]')?.textContent.replace(/[₱,]/g,''))}));
+    if(!rows.length){alert('No canvassed items found for this project.');return}
+    const p=project()||{},companyRecord=(companies||[]).find(item=>String(item.id)===String(p.company)||String(item.name)===String(p.company))||(companies||[]).find(item=>String(item.id)===String(company))||{},companyName=companyRecord.name||p.company||'',body=rows.map((row,index)=>'<tr><td>'+String(index+1)+'</td><td>'+esc(row.item)+'</td><td>'+esc(row.supplier)+'</td><td class="number">'+String(row.qty)+'</td><td>'+esc(row.unit)+'</td><td class="number">'+String(row.markup)+'%</td><td class="number">'+money(row.price)+'</td><td class="number">'+money(row.total)+'</td></tr>').join(''),grandTotal=rows.reduce((sum,row)=>sum+row.total,0),doc='<!doctype html><html><head><meta charset="utf-8"><title>RFQ - '+esc(p.name||'Project')+'</title><style>body{font:13px Arial,sans-serif;color:#18283f;margin:30px}h1{margin:0;text-align:center;font-size:23px}h2{text-align:center;font-size:15px;font-weight:normal;margin:4px 0 22px}.meta{display:grid;grid-template-columns:1fr 1fr;gap:7px 24px;margin:18px 0}.meta b{display:inline-block;min-width:90px}table{width:100%;border-collapse:collapse;margin-top:18px}th,td{border:1px solid #cbd6e2;padding:7px;text-align:left;vertical-align:top}th{background:#eaf1f8;font-size:10px;text-transform:uppercase}.number{text-align:right}.total{text-align:right;font-size:16px;margin-top:14px}.sign{display:grid;grid-template-columns:1fr 1fr;gap:55px;margin-top:65px}.line{border-top:1px solid #333;padding-top:6px;text-align:center}@media print{button{display:none}tr{page-break-inside:avoid}}</style></head><body><button onclick="window.print()">Print / Save as PDF</button><h1>REQUEST FOR QUOTATION</h1><h2>'+esc(companyName)+'</h2><div class="meta"><div><b>Project:</b> '+esc(p.name||'')+'</div><div><b>Project Code:</b> '+esc(p.code||'')+'</div><div><b>Date:</b> '+esc(todayLocal())+'</div><div><b>Items:</b> '+String(rows.length)+'</div></div><table><thead><tr><th>No.</th><th>Item / Material</th><th>Supplier</th><th>Qty</th><th>Unit</th><th>Markup</th><th>RFQ Price</th><th>Total</th></tr></thead><tbody>'+body+'</tbody></table><div class="total"><b>Total RFQ Amount: '+money(grandTotal)+'</b></div><div class="sign"><div class="line">Prepared By</div><div class="line">Approved By</div></div></body></html>',popup=window.open('','_blank');if(!popup){alert('Please allow pop-ups to print the RFQ.');return}popup.document.write(doc);popup.document.close();popup.focus();setTimeout(()=>popup.print(),300);
+  }
+  function openRfqDialog(){
+    const rows=rfqItems(),modal=document.createElement('div');modal.className='modal show';modal.id='rfqModal';
+    const body=rows.length?rows.map((row,index)=>`<tr data-rfq-row data-rfq-item="${esc(row.item)}" data-rfq-supplier="${esc(row.supplier)}" data-rfq-qty="${row.qty}" data-rfq-unit="${esc(row.unit)}" data-rfq-unit-cost="${row.unitCost}"><td class="row-number">${index+1}</td><td>${esc(row.item)}</td><td>${esc(row.supplier)}</td><td>${row.qty}</td><td>${esc(row.unit)}</td><td><input class="field rfq-markup-input" data-rfq-markup type="number" min="0" step="any" value="0" style="width:90px"></td><td data-rfq-price>${money(row.unitCost)}</td><td data-rfq-total>${money(row.qty*row.unitCost)}</td></tr>`).join(''):'<tr><td colspan="8" class="empty">No canvassed items found for this project.</td></tr>';
+    modal.innerHTML=`<div class="dialog wide-dialog rfq-dialog"><div style="display:flex;align-items:center;justify-content:space-between;gap:12px"><h3 style="margin:0">Generate RFQ</h3><button type="button" class="btn secondary" id="closeRfqDialog" title="Close dialog" aria-label="Close dialog"><i class="bi bi-x-lg" aria-hidden="true"></i></button></div><p class="sub">Enter a separate markup percentage for each canvassed item.</p><div class="scroll"><table class="rfq-table"><thead><tr><th class="row-number">No.</th><th>Item / Material</th><th>Supplier</th><th>Qty</th><th>Unit</th><th>Markup %</th><th>RFQ Price</th><th>Total</th></tr></thead><tbody>${body}</tbody></table></div><div class="rfq-grand-total"><span>Total RFQ Amount</span><strong data-rfq-grand-total>${money(rows.reduce((sum,row)=>sum+row.qty*row.unitCost,0))}</strong></div><div class="foot"><button type="button" class="btn secondary" id="cancelRfqDialog">Cancel</button><button type="button" class="btn" id="printRfqButton" title="Print RFQ" aria-label="Print RFQ"><i class="bi bi-printer" aria-hidden="true"></i></button></div></div>`;
+    document.body.appendChild(modal);modal.querySelector('#closeRfqDialog').onclick=closeRfqDialog;modal.querySelector('#cancelRfqDialog').onclick=closeRfqDialog;modal.onclick=event=>{if(event.target===modal)closeRfqDialog()};modal.querySelectorAll('[data-rfq-markup]').forEach(input=>input.oninput=refreshRfqTotals);modal.querySelector('#printRfqButton').onclick=printRfq;refreshRfqTotals();
+  }
+  const baseDetailWithRfq=detail;
+  detail=function(){
+    baseDetailWithRfq.apply(this,arguments);
+    if(page!=='detail'||tab!=='canvassing')return;
+    const addButton=document.getElementById('addRow');
+    if(!addButton||document.getElementById('generateRfqButton'))return;
+    const button=document.createElement('button');button.className='btn secondary';button.type='button';button.id='generateRfqButton';button.title='Generate RFQ';button.setAttribute('aria-label','Generate RFQ');button.innerHTML='<i class="bi bi-file-earmark-text" aria-hidden="true"></i> Generate RFQ';button.onclick=openRfqDialog;addButton.parentElement.insertBefore(button,addButton);
+  };
+  const style=document.createElement('style');style.textContent='.rfq-dialog{width:min(1120px,100%)}.rfq-table{white-space:nowrap}.rfq-table .rfq-markup-input{padding:6px 8px}.rfq-grand-total{display:flex;justify-content:flex-end;align-items:center;gap:12px;margin-top:12px;padding:12px 14px;border:1px solid var(--line);border-radius:9px;background:var(--surface-2);font-weight:700}.rfq-grand-total strong{font-size:18px;color:var(--green)}';document.head.appendChild(style);
+})();
+</script>
+<script>
+(function(){
+  const nativeOpen=window.open;
+  window.open=function(){
+    const popup=nativeOpen.apply(window,arguments);
+    if(!popup?.document)return popup;
+    const nativeWrite=popup.document.write.bind(popup.document);
+    popup.document.write=function(html){
+      let output=String(html||'');
+      if(/<h1>\s*REQUEST FOR QUOTATION\s*<\/h1>/i.test(output)){
+        output=output.replace(/(<h2>[\s\S]*?<\/h2>)/i,'$1<div style="text-align:center;font-weight:700;margin-top:-16px;margin-bottom:18px">Joseph Galve - 0926 224 2813</div>');
+        output=output.replace(/<div><b>Items:<\/b>[^<]*<\/div>/i,'');
+        output=output.replace(/<th>Markup<\/th>/i,'');
+        output=output.replace(/<td class="number">[^<]*%<\/td>/gi,'');
+      }
+      return nativeWrite(output);
+    };
+    return popup;
+  };
+})();
+</script>
+<script>
+(function(){
+  db.savedRfqs=Array.isArray(db.savedRfqs)?db.savedRfqs:[];
+  function currentRfqRows(){
+    return [...document.querySelectorAll('#rfqModal [data-rfq-row]')].map(row=>{const unitCost=num(row.dataset.rfqUnitCost),markup=num(row.querySelector('[data-rfq-markup]')?.value),qty=num(row.dataset.rfqQty),price=unitCost*(1+markup/100);return {item:row.dataset.rfqItem||'',supplier:row.dataset.rfqSupplier||'',qty,unit:row.dataset.rfqUnit||'',unitCost,markup,price,total:qty*price}});
+  }
+  function printSavedRfq(record){
+    const p=db.projects.find(item=>String(item.id)===String(record.project))||project()||{},companyRecord=(companies||[]).find(item=>String(item.id)===String(p.company)||String(item.name)===String(p.company))||(companies||[]).find(item=>String(item.id)===String(company))||{},companyName=companyRecord.name||p.company||'',rows=Array.isArray(record.rows)?record.rows:[],body=rows.map((row,index)=>'<tr><td>'+String(index+1)+'</td><td>'+esc(row.item)+'</td><td>'+esc(row.supplier||'')+'</td><td class="number">'+String(row.qty)+'</td><td>'+esc(row.unit||'')+'</td><td class="number">'+money(row.price)+'</td><td class="number">'+money(row.total)+'</td></tr>').join(''),total=rows.reduce((sum,row)=>sum+num(row.total),0),doc='<!doctype html><html><head><meta charset="utf-8"><title>RFQ - '+esc(p.name||'Project')+'</title><style>body{font:13px Arial,sans-serif;color:#18283f;margin:30px}h1{margin:0;text-align:center;font-size:23px}h2{text-align:center;font-size:15px;font-weight:normal;margin:4px 0 2px}.contact{text-align:center;font-weight:700;margin-bottom:18px}.meta{display:grid;grid-template-columns:1fr 1fr;gap:7px 24px;margin:18px 0}.meta b{display:inline-block;min-width:90px}table{width:100%;border-collapse:collapse;margin-top:18px}th,td{border:1px solid #cbd6e2;padding:7px;text-align:left;vertical-align:top}th{background:#eaf1f8;font-size:10px;text-transform:uppercase}.number{text-align:right}.total{text-align:right;font-size:16px;margin-top:14px}.sign{display:grid;grid-template-columns:1fr 1fr;gap:55px;margin-top:65px}.line{border-top:1px solid #333;padding-top:6px;text-align:center}@media print{button{display:none}tr{page-break-inside:avoid}}</style></head><body><button onclick="window.print()">Print / Save as PDF</button><h1>REQUEST FOR QUOTATION</h1><h2>'+esc(companyName)+'</h2><div class="contact">Joseph Galve - 0926 224 2813</div><div class="meta"><div><b>Project:</b> '+esc(p.name||'')+'</div><div><b>Project Code:</b> '+esc(p.code||'')+'</div><div><b>Date:</b> '+esc(record.date||todayLocal())+'</div><div><b>RFQ No.:</b> '+esc(record.rfqNo||'')+'</div></div><table><thead><tr><th>No.</th><th>Item / Material</th><th>Supplier</th><th>Qty</th><th>Unit</th><th>RFQ Price</th><th>Total</th></tr></thead><tbody>'+body+'</tbody></table><div class="total"><b>Total RFQ Amount: '+money(total)+'</b></div><div class="sign"><div class="line">Prepared By</div><div class="line">Approved By</div></div></body></html>',popup=window.open('','_blank');if(!popup){alert('Please allow pop-ups to print the RFQ.');return}popup.document.write(doc);popup.document.close();popup.focus();setTimeout(()=>popup.print(),300);
+  }
+  function closeSavedRfqDialog(){document.getElementById('savedRfqModal')?.remove()}
+  function showSavedRfqs(){
+    const records=(db.savedRfqs||[]).filter(record=>String(record.project)===String(projectId)).sort((a,b)=>String(b.createdAt||b.date||'').localeCompare(String(a.createdAt||a.date||''))),modal=document.createElement('div');modal.className='modal show';modal.id='savedRfqModal';
+    const body=records.length?records.map((record,index)=>`<tr><td class="row-number">${index+1}</td><td>${esc(record.rfqNo||'')}</td><td>${esc(record.date||'')}</td><td>${Array.isArray(record.rows)?record.rows.length:0}</td><td><b class="negative">${money((record.rows||[]).reduce((sum,row)=>sum+num(row.total),0))}</b></td><td><button class="btn secondary saved-rfq-print" type="button" title="Print RFQ" aria-label="Print RFQ"><i class="bi bi-printer" aria-hidden="true"></i></button></td></tr>`).join(''):'<tr><td colspan="6" class="empty">No saved RFQs found for this project.</td></tr>';
+    modal.innerHTML=`<div class="dialog wide-dialog saved-rfq-dialog"><div style="display:flex;align-items:center;justify-content:space-between;gap:12px"><h3 style="margin:0">Saved RFQs</h3><button type="button" class="btn secondary" id="closeSavedRfqDialog" title="Close dialog" aria-label="Close dialog"><i class="bi bi-x-lg" aria-hidden="true"></i></button></div><p class="sub">Saved RFQs for this project.</p><div class="scroll"><table><thead><tr><th class="row-number">No.</th><th>RFQ No.</th><th>Date</th><th>Items</th><th>Total Amount</th><th>Action</th></tr></thead><tbody>${body}</tbody></table></div><div class="foot"><button type="button" class="btn secondary" id="cancelSavedRfqDialog">Close</button></div></div>`;
+    document.body.appendChild(modal);modal.querySelector('#closeSavedRfqDialog').onclick=closeSavedRfqDialog;modal.querySelector('#cancelSavedRfqDialog').onclick=closeSavedRfqDialog;modal.onclick=event=>{if(event.target===modal)closeSavedRfqDialog()};modal.querySelectorAll('.saved-rfq-print').forEach((button,index)=>button.onclick=()=>printSavedRfq(records[index]));
+  }
+  function saveCurrentRfq(){
+    const rows=currentRfqRows();if(!rows.length){alert('No canvassed items found for this RFQ.');return}
+    const record={id:uid(),rfqNo:'RFQ-'+String(Date.now()).slice(-8),project:projectId,date:todayLocal(),createdAt:new Date().toISOString(),rows};
+    db.savedRfqs.push(record);writeLog('Add','Saved RFQ',record.rfqNo);document.getElementById('rfqModal')?.remove();save();alert('RFQ '+record.rfqNo+' was saved.');
+  }
+  function enhanceRfqDialog(){
+    const modal=document.getElementById('rfqModal');if(!modal||modal.dataset.saveBound)return;modal.dataset.saveBound='1';
+    const foot=modal.querySelector('.foot');if(!foot)return;
+    const printButton=modal.querySelector('#printRfqButton'),saveButton=document.createElement('button');saveButton.type='button';saveButton.className='btn secondary';saveButton.id='saveRfqButton';saveButton.title='Save RFQ';saveButton.setAttribute('aria-label','Save RFQ');saveButton.innerHTML='<i class="bi bi-save" aria-hidden="true"></i>';saveButton.onclick=saveCurrentRfq;foot.insertBefore(saveButton,printButton);
+  }
+  const observer=new MutationObserver(enhanceRfqDialog);observer.observe(document.body,{childList:true,subtree:true});
+  const baseDetailWithSavedRfqs=detail;
+  detail=function(){
+    baseDetailWithSavedRfqs.apply(this,arguments);
+    if(page!=='detail'||tab!=='canvassing')return;
+    const addButton=document.getElementById('addRow');if(!addButton||document.getElementById('savedRfqButton'))return;
+    const button=document.createElement('button');button.className='btn secondary';button.type='button';button.id='savedRfqButton';button.title='Show saved RFQs';button.setAttribute('aria-label','Show saved RFQs');button.innerHTML='<i class="bi bi-folder2-open" aria-hidden="true"></i> Saved RFQs';button.onclick=showSavedRfqs;addButton.parentElement.insertBefore(button,addButton);
+  };
+  const baseApplySavedRfqs=applyFirebaseWorkspace;
+  applyFirebaseWorkspace=function(value){baseApplySavedRfqs(value);db.savedRfqs=Array.isArray(db.savedRfqs)?db.savedRfqs:[]};
+  const style=document.createElement('style');style.textContent='.saved-rfq-dialog{width:min(900px,100%)}.saved-rfq-dialog .scroll table{white-space:nowrap}';document.head.appendChild(style);
+})();
+</script>
+<script>
+(function(){
+  db.autoBackupTime=db.autoBackupTime||'16:00';
+  const baseConfigurationWithAutoBackupTime=configuration;
+  configuration=function(){
+    baseConfigurationWithAutoBackupTime();
+    if(typeof window.isKindrichAdmin==='function'&&!window.isKindrichAdmin())return;
+    if(document.getElementById('autoBackupSettingsPanel'))return;
+    const panel=document.createElement('section');
+    panel.className='panel';
+    panel.id='autoBackupSettingsPanel';
+    panel.innerHTML='<div class="config-panel-title"><div><h3>Automatic Backup</h3><p class="sub" style="margin:6px 0 0">Choose the local time for the daily Firebase backup ZIP on open Admin/Superadmin devices.</p></div></div><div class="config-form"><div class="group"><label for="autoBackupTime">Automatic Backup Time</label><input class="field" id="autoBackupTime" type="time" value="'+esc(db.autoBackupTime||'16:00')+'"><small class="sub">The backup runs once per day on each device with this page open.</small></div><div class="toolbar" style="justify-content:flex-end;margin-top:12px"><button class="btn" id="saveAutoBackupTime" type="button">Save Backup Time</button></div></div>';
+    document.getElementById('content').insertBefore(panel,document.getElementById('content').firstElementChild);
+    panel.querySelector('#saveAutoBackupTime').onclick=()=>{
+      const value=panel.querySelector('#autoBackupTime').value;
+      if(!/^([01]\d|2[0-3]):[0-5]\d$/.test(value)){alert('Choose a valid backup time.');return}
+      db.autoBackupTime=value;
+      localStorage.removeItem('kindrich_auto_backup_last_date_v1');
+      writeLog('Update','Automatic Backup Time',value);
+      save();
+      window.scheduleKindrichAutoBackup?.();
+      notifySuccess('Automatic backup time saved');
+    };
+  };
+  const autoBackupKey='kindrich_auto_backup_last_date_v1';
+  let autoBackupTimer=null;
+  function localDateKey(date=new Date()){
+    return date.getFullYear()+'-'+String(date.getMonth()+1).padStart(2,'0')+'-'+String(date.getDate()).padStart(2,'0');
+  }
+  function nextAutoBackupDelay(){
+    const now=new Date(),today=localDateKey(now),last=localStorage.getItem(autoBackupKey),target=new Date(now);
+    const configured=String(db.autoBackupTime||'16:00').match(/^(\d{2}):(\d{2})$/),hours=configured?Math.min(23,Number(configured[1])):16,minutes=configured?Math.min(59,Number(configured[2])):0;
+    target.setHours(hours,minutes,0,0);
+    if(now.getTime()>=target.getTime()&&last!==today)return 1000;
+    if(target.getTime()<=now.getTime())target.setDate(target.getDate()+1);
+    return Math.max(1000,target.getTime()-now.getTime());
+  }
+  function scheduleAutoBackup(){
+    clearTimeout(autoBackupTimer);
+    autoBackupTimer=setTimeout(runAutoBackup,nextAutoBackupDelay());
+  }
+  async function runAutoBackup(){
+    const today=localDateKey();
+    if(localStorage.getItem(autoBackupKey)===today){scheduleAutoBackup();return}
+    if(!loggedIn||typeof window.downloadFirebaseBackup!=='function'||typeof window.isKindrichAdmin!=='function'||!window.isKindrichAdmin()){scheduleAutoBackup();return}
+    try{
+      await window.downloadFirebaseBackup();
+      localStorage.setItem(autoBackupKey,today);
+      if(typeof window.notifySuccess==='function')window.notifySuccess('Automatic backup downloaded');
+    }catch(error){
+      console.error('Automatic Firebase backup failed',error);
+      clearTimeout(autoBackupTimer);
+      autoBackupTimer=setTimeout(runAutoBackup,10*60*1000);
+    }
+    if(localStorage.getItem(autoBackupKey)===today)scheduleAutoBackup();
+  }
+  window.scheduleKindrichAutoBackup=scheduleAutoBackup;
+  scheduleAutoBackup();
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)scheduleAutoBackup()});
+  setInterval(()=>{if(loggedIn)scheduleAutoBackup()},60*1000);
 })();
 </script>
 </body>
