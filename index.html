@@ -130,7 +130,7 @@ const specs={project:[['company','Company','company'],['code','Project Code','te
 function rowValue(row,names){let entries=Object.entries(row||{}),norm=x=>String(x||'').toLowerCase().replace(/[^a-z0-9]/g,''),wanted=names.map(norm),aliases={date:['salarydate'],days:['day'],rateperday:['rateday']},hit=entries.find(([k])=>{let key=norm(k);return wanted.includes(key)||wanted.some(name=>(aliases[name]||[]).includes(key))});return hit?hit[1]:''}
 function parseCsv(text){let lines=String(text||'').split(/\r?\n/).filter(x=>x.trim());if(!lines.length)return [];let parse=line=>{let out=[],cur='',q=false;for(let i=0;i<line.length;i++){let c=line[i];if(c==='\"'&&line[i+1]==='\"'){cur+='\"';i++}else if(c==='\"')q=!q;else if(c===','&&!q){out.push(cur);cur=''}else cur+=c}out.push(cur);return out};let heads=parse(lines[0]);return lines.slice(1).map(line=>{let cells=parse(line),row={};heads.forEach((h,i)=>row[h]=cells[i]??'');return row})}
 function normalizeItemImportRow(row,category){category=String(category||rowValue(row,['category','item category','category name'])).trim()||'Uncategorized';let description=String(rowValue(row,['Item / Material','Materials/item description','Material/item description','Materials / item description','Material / item description','Materials','Material','Item','Item Description','Description'])).trim(),qty=num(rowValue(row,['qty','quantity','purchase qty','po qty'])),cost=num(rowValue(row,['Unit Cost','cost','unit cost','unit price','mc','purchase unit cost','actual p.o unit cost'])),unit=String(rowValue(row,['unit','uom'])).trim(),totalCost=num(rowValue(row,['Total Cost','total cost','Total']));remarks=String(rowValue(row,['Remarks','remarks','remark','notes'])).trim();if(!description)return null;return {id:uid(),project:projectId,category,description,unit,qty,mc:cost,poQty:qty,poMc:cost,totalCost:totalCost||qty*cost,remarks}}
-function downloadItemTemplate(){let rows=[['Item / Material','Qty','Unit Cost','Unit','Total Cost','Remarks'],['Cement',10,285,'bag',2850,'Sample only'],['Steel Bar',25,220,'pcs',5500,'Sample only']];if(window.XLSX){let ws=XLSX.utils.aoa_to_sheet(rows),wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Items');XLSX.writeFile(wb,'kindrich_items_template.xlsx')}else{download('kindrich_items_template.csv',rows.map(r=>r.map(x=>'\"'+String(x).replace(/\"/g,'\"\"')+'\"').join(',')).join('\r\n'),'text/csv')}}
+function downloadItemTemplate(){let rows=[['Item / Material','Qty','Unit','Unit Cost','Total Cost','Remarks'],['Cement',10,'bag',285,2850,'Sample only'],['Steel Bar',25,'pcs',220,5500,'Sample only']];if(window.XLSX){let ws=XLSX.utils.aoa_to_sheet(rows),wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Items');XLSX.writeFile(wb,'kindrich_items_template.xlsx')}else{download('kindrich_items_template.csv',rows.map(r=>r.map(x=>'\"'+String(x).replace(/\"/g,'\"\"')+'\"').join(',')).join('\r\n'),'text/csv')}}
 function downloadPurchaseTemplate(){let rows=[['Date','Items / Materials Description','Qty','Cost per Qty','Total'],...linked('items',projectId).map(x=>['',x.description,'','',''])];if(window.XLSX){let ws=XLSX.utils.aoa_to_sheet(rows),wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Purchases');XLSX.writeFile(wb,'kindrich_purchase_items.xlsx')}else{download('kindrich_purchase_items.csv',rows.map(r=>r.map(x=>'\"'+String(x).replace(/\"/g,'\"\"')+'\"').join(',')).join('\r\n'),'text/csv')}}
 function importPurchaseDate(value){let raw=String(value??'').trim();if(!raw)return todayLocal();if(/^\d+(\.\d+)?$/.test(raw)&&window.XLSX?.SSF){let parsed=XLSX.SSF.parse_date_code(Number(raw));if(parsed)return `${parsed.y}-${String(parsed.m).padStart(2,'0')}-${String(parsed.d).padStart(2,'0')}`}let date=new Date(raw);return isNaN(date)?todayLocal():localDate(date)}
 function normalizePurchaseImportRow(row){let description=String(rowValue(row,['Items / Materials Description','Item / Material','Materials/item description','Material/item description','Materials','Material','Item','Item Description','Description'])).trim(),item=linked('items',projectId).find(x=>String(x.description||'').trim().toLowerCase()===description.toLowerCase()),qty=num(rowValue(row,['Qty','Quantity','Purchase Qty'])),unitCost=num(rowValue(row,['Cost per Qty','Cost','Unit Cost','Unit Price','Purchase Unit Cost'])),amount=num(rowValue(row,['Total','Total Amount','Amount']))||qty*unitCost;if(!description||!item||qty<=0||unitCost<0||amount<=0)return null;return {id:uid(),project:projectId,itemId:item.id,description:item.description,unit:item.unit||'',date:importPurchaseDate(rowValue(row,['Date','Purchase Date'])),qty,unitCost,amount,remarks:''}}
@@ -3817,6 +3817,20 @@ body.dark-mode table tbody tr.pending-delete-row:hover > td{background:#5c303a!i
     let hidden=fields.querySelector('[name="supplier"]');
     if(!hidden){hidden=document.createElement('input');hidden.type='hidden';hidden.name='supplier';fields.appendChild(hidden)}
     bindLineSuppliers();
+    const lineBox=fields.querySelector('#canvassLines');
+    if(lineBox&&!lineBox.dataset.supplierDelegation){
+      lineBox.dataset.supplierDelegation='1';
+      lineBox.addEventListener('change',event=>{
+        if(event.target.name!=='lineSupplier')return;
+        const row=event.target.closest('[data-line]'),manual=row?.querySelector('[name="lineSupplierManual"]');
+        if(!manual)return;
+        const isManual=event.target.value==='__manual__';
+        manual.style.display=isManual?'':'none';
+        manual.required=isManual;
+        if(!isManual)manual.value='';
+        if(isManual)manual.focus();
+      });
+    }
     const existing=id?db.canvassing.find(item=>item.id===id):null;
     if(existing?.supplier){
       document.querySelectorAll('#canvassLines [data-line]').forEach(row=>{
@@ -4148,6 +4162,39 @@ body.dark-mode table tbody tr.pending-delete-row:hover > td{background:#5c303a!i
   observer.observe(document.getElementById('content')||document.body,{childList:true,characterData:true,subtree:true});
   scan();
   window.kindrichCurrencyCounterScan=scan;
+})();
+</script>
+<script>
+(function(){
+  const soundUrl=new URL('assets/sound/notification_chime_v2.wav',location.href).href;
+  let notificationAudio=null,notificationBaselineReady=false,lastNotificationCounts={messages:0,requests:0};
+  function notificationCounts(){
+    if(!loggedIn||typeof currentUser!=='function')return null;
+    const me=currentUser(),projectIds=new Set((typeof projects==='function'?projects():[]).map(item=>item.id)),
+      messages=(db.messages||[]).filter(item=>item?.to===me.id&&!item.read).length,
+      requests=(db.canvassing||[]).filter(item=>projectIds.has(item?.project)&&item?.approvalStatus==='Requested').length+
+        (db.purchaseRequests||[]).filter(item=>projectIds.has(item?.project)&&item?.approvalStatus==='Requested').length+
+        (db.manpowerApprovals||[]).filter(item=>projectIds.has(item?.project)&&item?.approvalStatus==='Requested').length+
+        (db.manpower||[]).filter(item=>projectIds.has(item?.project)&&item?.approvalStatus==='Requested'&&!item?.approvalBatchId).length;
+    return {messages,requests};
+  }
+  function playNotificationSound(){
+    try{
+      if(!notificationAudio)notificationAudio=new Audio(soundUrl);
+      notificationAudio.currentTime=0;
+      notificationAudio.play().catch(()=>{});
+    }catch(error){}
+  }
+  function checkNotifications(){
+    const counts=notificationCounts();
+    if(!counts)return;
+    if(!notificationBaselineReady){lastNotificationCounts=counts;notificationBaselineReady=true;return}
+    if(counts.messages>lastNotificationCounts.messages||counts.requests>lastNotificationCounts.requests)playNotificationSound();
+    lastNotificationCounts=counts;
+  }
+  document.addEventListener('pointerdown',()=>{if(!notificationAudio)notificationAudio=new Audio(soundUrl)}, {once:true,passive:true});
+  setInterval(checkNotifications,2000);
+  window.kindrichNotificationSoundCheck=checkNotifications;
 })();
 </script>
 </body>
