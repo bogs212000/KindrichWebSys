@@ -29,5 +29,8 @@
   "firestore": {
     "rules": "firestore.rules",
     "predeploy": ["node tools/firestore-deploy-guard.js"]
+  },
+  "database": {
+    "rules": "database.rules.json"
   }
 }

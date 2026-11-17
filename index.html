@@ -4197,6 +4197,75 @@ body.dark-mode table tbody tr.pending-delete-row:hover > td{background:#5c303a!i
   window.kindrichNotificationSoundCheck=checkNotifications;
 })();
 </script>
+<script>
+(function(){
+  const currentVoucherGenerator=generateVouchersFromPOs;
+  generateVouchersFromPOs=function(){
+    const purchaseOrderInputs=[...document.querySelectorAll('[data-voucher-po]:checked')];
+    if(!purchaseOrderInputs.length)return currentVoucherGenerator();
+    const ids=purchaseOrderInputs.map(input=>input.value),fund=document.getElementById('voucherFundSelect')?.value||'';
+    if(!fund){alert('Please select a fund allocated.');return}
+    let made=0,today=todayLocal();
+    ids.forEach(id=>{
+      const po=db.canvassing.find(row=>row.id===id);
+      if(!po||db.vouchering.some(voucher=>voucher.sourceCanvassId===id))return;
+      db.vouchering.push({id:uid(),project:po.project,date:today,voucherNo:nextVoucherNo(),payee:po.supplier||'',description:poDescription(po),amount:canvassTotal(po),status:'Draft',remarks:po.remarks||'',sourceCanvassId:id,fundName:fund});
+      made++;
+    });
+    if(!made){alert('Selected purchase order already has a voucher.');return}
+    writeLog('Add','Vouchering',made+' voucher(s) generated using '+fund);save();
+  };
+})();
+</script>
+<script>
+(function(){
+  const baseVoucheringPage=voucheringPage;
+  voucheringPage=function(){
+    baseVoucheringPage.apply(this,arguments);
+    [...document.querySelectorAll('section.panel')].find(panel=>panel.querySelector('h3')?.textContent.trim()==='Items Need to Voucher')?.remove();
+  };
+})();
+</script>
+<script>
+(function(){
+  const pageSize=20;
+  function setupCanvassedInventoryPagination(){
+    const records=document.getElementById('canvassedInventoryRecords');
+    if(!records)return;
+    window.canvassedInventoryPaginationObserver?.disconnect();
+    document.getElementById('canvassedInventoryPagination')?.remove();
+    let currentPage=1;
+    const pagination=document.createElement('div');
+    pagination.id='canvassedInventoryPagination';
+    pagination.className='toolbar';
+    pagination.style.cssText='justify-content:center;gap:8px;margin-top:12px';
+    records.after(pagination);
+    const render=()=>{
+      const rows=[...records.querySelectorAll('tbody tr')],totalPages=Math.max(1,Math.ceil(rows.length/pageSize));
+      currentPage=Math.min(currentPage,totalPages);
+      rows.forEach((row,index)=>{row.style.display=index>=(currentPage-1)*pageSize&&index<currentPage*pageSize?'':'none'});
+      pagination.innerHTML=rows.length?`<button class="btn secondary" type="button" data-canvassed-page-prev ${currentPage<=1?'disabled':''}>‹</button><span class="pill">Page ${currentPage} / ${totalPages}</span><button class="btn secondary" type="button" data-canvassed-page-next ${currentPage>=totalPages?'disabled':''}>›</button>`:'';
+      pagination.querySelector('[data-canvassed-page-prev]')?.addEventListener('click',()=>{if(currentPage>1){currentPage--;render()}});
+      pagination.querySelector('[data-canvassed-page-next]')?.addEventListener('click',()=>{if(currentPage<totalPages){currentPage++;render()}});
+    };
+    window.canvassedInventoryPaginationObserver=new MutationObserver(()=>{currentPage=1;render()});
+    window.canvassedInventoryPaginationObserver.observe(records,{childList:true,subtree:true});
+    render();
+  }
+  const baseCanvassedInventoryRender=render;
+  render=function(){baseCanvassedInventoryRender.apply(this,arguments);if(page==='canvassedInventory')setupCanvassedInventoryPagination()};
+  window.setupCanvassedInventoryPagination=setupCanvassedInventoryPagination;
+})();
+</script>
+<script>
+(function(){
+  const baseRecordTableWithoutPayedModeSummary=recordTable;
+  recordTable=function(rows){
+    if(tab==='payed')return table(['Date','Mode of Payment','Description / Reference','Amount Payed','Remarks','Actions'],(rows||[]).map(row=>[esc(row.date),esc(row.mode||row.entity||''),esc(row.description),`<b class="positive">${money(row.amount)}</b>`,esc(row.remarks),buttons('payed',row.id)]));
+    return baseRecordTableWithoutPayedModeSummary.apply(this,arguments);
+  };
+})();
+</script>
 </body>
 </html>
 

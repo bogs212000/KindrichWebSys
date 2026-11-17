@@ -1,0 +1,15 @@
+{
+  "rules": {
+    "presence": {
+      ".read": true,
+      "$uid": {
+        ".write": true,
+        ".validate": "newData.hasChildren(['username', 'online', 'lastSeenAt']) && newData.child('username').isString() && newData.child('online').isBoolean() && newData.child('lastSeenAt').isNumber()"
+      }
+    },
+    "summary": {
+      ".read": true,
+      ".write": true
+    }
+  }
+}
