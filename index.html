@@ -3869,20 +3869,22 @@ body.dark-mode table tbody tr.pending-delete-row:hover > td{background:#5c303a!i
 </script>
 <script>
 (function(){
+  const rfqRound=value=>Math.round((Number(value)||0)*100)/100;
+  const rfqTotalRound=value=>Math.round(Number(value)||0);
   function rfqItems(){
     return linked('canvassing',projectId).flatMap(record=>canvassLines(record).map(line=>({
-      item:String(line.item||''),supplier:String(line.supplier||record.supplier||''),qty:num(line.qty),unit:String(line.unit||''),unitCost:num(line.unitCost),date:String(record.date||''),remarks:String(line.remarks||'')
+      item:String(line.item||''),supplier:String(line.supplier||record.supplier||''),qty:num(line.qty),unit:String(line.unit||''),unitCost:num(line.unitCost)+(num(line.additionalAmount)/Math.max(1,num(line.qty))),date:String(record.date||''),remarks:String(line.remarks||'')
     }))).filter(row=>row.item&&row.qty>0);
   }
   function closeRfqDialog(){document.getElementById('rfqModal')?.remove()}
   function refreshRfqTotals(){
     document.querySelectorAll('#rfqModal [data-rfq-row]').forEach(row=>{
-      const cost=num(row.dataset.rfqUnitCost),qty=num(row.dataset.rfqQty),markup=num(row.querySelector('[data-rfq-markup]')?.value),price=cost*(1+markup/100),total=qty*price;
+      const cost=num(row.dataset.rfqUnitCost),qty=num(row.dataset.rfqQty),markup=num(row.querySelector('[data-rfq-markup]')?.value),price=cost*(1+markup/100),total=rfqTotalRound(qty*price);
       const priceCell=row.querySelector('[data-rfq-price]'),totalCell=row.querySelector('[data-rfq-total]');
       if(priceCell)priceCell.textContent=money(price);
       if(totalCell)totalCell.textContent=money(total);
     });
-    const total=[...document.querySelectorAll('#rfqModal [data-rfq-total]')].reduce((sum,cell)=>sum+num(cell.textContent.replace(/[₱,]/g,'')),0);
+    const total=rfqTotalRound([...document.querySelectorAll('#rfqModal [data-rfq-total]')].reduce((sum,cell)=>sum+num(cell.textContent.replace(/[₱,]/g,'')),0));
     const summary=document.querySelector('#rfqModal [data-rfq-grand-total]');if(summary)summary.textContent=money(total);
   }
   function printRfq(){
@@ -3892,8 +3894,8 @@ body.dark-mode table tbody tr.pending-delete-row:hover > td{background:#5c303a!i
   }
   function openRfqDialog(){
     const rows=rfqItems(),modal=document.createElement('div');modal.className='modal show';modal.id='rfqModal';
-    const body=rows.length?rows.map((row,index)=>`<tr data-rfq-row data-rfq-item="${esc(row.item)}" data-rfq-supplier="${esc(row.supplier)}" data-rfq-qty="${row.qty}" data-rfq-unit="${esc(row.unit)}" data-rfq-unit-cost="${row.unitCost}"><td class="row-number">${index+1}</td><td>${esc(row.item)}</td><td>${esc(row.supplier)}</td><td>${row.qty}</td><td>${esc(row.unit)}</td><td><input class="field rfq-markup-input" data-rfq-markup type="number" min="0" step="any" value="0" style="width:90px"></td><td data-rfq-price>${money(row.unitCost)}</td><td data-rfq-total>${money(row.qty*row.unitCost)}</td></tr>`).join(''):'<tr><td colspan="8" class="empty">No canvassed items found for this project.</td></tr>';
-    modal.innerHTML=`<div class="dialog wide-dialog rfq-dialog"><div style="display:flex;align-items:center;justify-content:space-between;gap:12px"><h3 style="margin:0">Generate RFQ</h3><button type="button" class="btn secondary" id="closeRfqDialog" title="Close dialog" aria-label="Close dialog"><i class="bi bi-x-lg" aria-hidden="true"></i></button></div><p class="sub">Enter a separate markup percentage for each canvassed item.</p><div class="rfq-bulk-markup"><label for="rfqApplyMarkup">Apply markup % to all</label><input class="field" id="rfqApplyMarkup" type="number" min="0" step="any" placeholder="e.g. 10"><button type="button" class="btn secondary" id="applyRfqMarkup">Apply</button></div><div class="scroll"><table class="rfq-table"><thead><tr><th class="row-number">No.</th><th>Item / Material</th><th>Supplier</th><th>Qty</th><th>Unit</th><th>Markup %</th><th>RFQ Price</th><th>Total</th></tr></thead><tbody>${body}</tbody></table></div><div class="rfq-grand-total"><span>Total RFQ Amount</span><strong data-rfq-grand-total>${money(rows.reduce((sum,row)=>sum+row.qty*row.unitCost,0))}</strong></div><div class="foot"><button type="button" class="btn secondary" id="cancelRfqDialog">Cancel</button><button type="button" class="btn" id="printRfqButton" title="Print RFQ" aria-label="Print RFQ"><i class="bi bi-printer" aria-hidden="true"></i></button></div></div>`;
+    const body=rows.length?rows.map((row,index)=>`<tr data-rfq-row data-rfq-item="${esc(row.item)}" data-rfq-supplier="${esc(row.supplier)}" data-rfq-qty="${row.qty}" data-rfq-unit="${esc(row.unit)}" data-rfq-unit-cost="${row.unitCost}"><td class="row-number">${index+1}</td><td>${esc(row.item)}</td><td>${esc(row.supplier)}</td><td>${row.qty}</td><td>${esc(row.unit)}</td><td><input class="field rfq-markup-input" data-rfq-markup type="number" min="0" step="any" value="0" style="width:90px"></td><td data-rfq-price>${money(row.unitCost)}</td><td data-rfq-total>${money(rfqRound(row.qty*row.unitCost))}</td></tr>`).join(''):'<tr><td colspan="8" class="empty">No canvassed items found for this project.</td></tr>';
+    modal.innerHTML=`<div class="dialog wide-dialog rfq-dialog"><div style="display:flex;align-items:center;justify-content:space-between;gap:12px"><h3 style="margin:0">Generate RFQ</h3><button type="button" class="btn secondary" id="closeRfqDialog" title="Close dialog" aria-label="Close dialog"><i class="bi bi-x-lg" aria-hidden="true"></i></button></div><p class="sub">Enter a separate markup percentage for each canvassed item.</p><div class="rfq-bulk-markup"><label for="rfqApplyMarkup">Apply markup % to all</label><input class="field" id="rfqApplyMarkup" type="number" min="0" step="any" placeholder="e.g. 10"><button type="button" class="btn secondary" id="applyRfqMarkup">Apply</button></div><div class="scroll"><table class="rfq-table"><thead><tr><th class="row-number">No.</th><th>Item / Material</th><th>Supplier</th><th>Qty</th><th>Unit</th><th>Markup %</th><th>RFQ Price</th><th>Total</th></tr></thead><tbody>${body}</tbody></table></div><div class="rfq-grand-total"><span>Total RFQ Amount</span><strong data-rfq-grand-total>${money(rfqRound(rows.reduce((sum,row)=>sum+row.qty*row.unitCost,0)))}</strong></div><div class="foot"><button type="button" class="btn secondary" id="cancelRfqDialog">Cancel</button><button type="button" class="btn" id="printRfqButton" title="Print RFQ" aria-label="Print RFQ"><i class="bi bi-printer" aria-hidden="true"></i></button></div></div>`;
     document.body.appendChild(modal);modal.querySelector('#closeRfqDialog').onclick=closeRfqDialog;modal.querySelector('#cancelRfqDialog').onclick=closeRfqDialog;modal.onclick=event=>{if(event.target===modal)closeRfqDialog()};modal.querySelectorAll('[data-rfq-markup]').forEach(input=>input.oninput=refreshRfqTotals);modal.querySelector('#applyRfqMarkup').onclick=()=>{const value=modal.querySelector('#rfqApplyMarkup').value.trim();if(value===''){alert('Enter a markup percentage to apply.');return}modal.querySelectorAll('[data-rfq-markup]').forEach(input=>{input.value=value});refreshRfqTotals()};modal.querySelector('#printRfqButton').onclick=printRfq;refreshRfqTotals();
   }
   const baseDetailWithRfq=detail;
@@ -3938,7 +3940,7 @@ body.dark-mode table tbody tr.pending-delete-row:hover > td{background:#5c303a!i
 (function(){
   db.savedRfqs=Array.isArray(db.savedRfqs)?db.savedRfqs:[];
   function currentRfqRows(){
-    return [...document.querySelectorAll('#rfqModal [data-rfq-row]')].map(row=>{const unitCost=num(row.dataset.rfqUnitCost),markup=num(row.querySelector('[data-rfq-markup]')?.value),qty=num(row.dataset.rfqQty),price=unitCost*(1+markup/100);return {item:row.dataset.rfqItem||'',supplier:row.dataset.rfqSupplier||'',qty,unit:row.dataset.rfqUnit||'',unitCost,markup,price,total:qty*price}});
+    return [...document.querySelectorAll('#rfqModal [data-rfq-row]')].map(row=>{const unitCost=num(row.dataset.rfqUnitCost),markup=num(row.querySelector('[data-rfq-markup]')?.value),qty=num(row.dataset.rfqQty),price=unitCost*(1+markup/100),total=Math.round(qty*price*100)/100;return {item:row.dataset.rfqItem||'',supplier:row.dataset.rfqSupplier||'',qty,unit:row.dataset.rfqUnit||'',unitCost,markup,price,total}});
   }
   function printSavedRfq(record){
     const p=db.projects.find(item=>String(item.id)===String(record.project))||project()||{},companyRecord=(companies||[]).find(item=>String(item.id)===String(p.company)||String(item.name)===String(p.company))||(companies||[]).find(item=>String(item.id)===String(company))||{},companyName=companyRecord.name||p.company||'',rows=Array.isArray(record.rows)?record.rows:[],body=rows.map((row,index)=>'<tr><td>'+String(index+1)+'</td><td>'+esc(row.item)+'</td><td>'+esc(row.supplier||'')+'</td><td class="number">'+String(row.qty)+'</td><td>'+esc(row.unit||'')+'</td><td class="number">'+money(row.price)+'</td><td class="number">'+money(row.total)+'</td></tr>').join(''),total=rows.reduce((sum,row)=>sum+num(row.total),0),doc='<!doctype html><html><head><meta charset="utf-8"><title>RFQ - '+esc(p.name||'Project')+'</title><style>body{font:13px Arial,sans-serif;color:#18283f;margin:30px}h1{margin:0;text-align:center;font-size:23px}h2{text-align:center;font-size:15px;font-weight:normal;margin:4px 0 2px}.contact{text-align:center;font-weight:700;margin-bottom:18px}.meta{display:grid;grid-template-columns:1fr 1fr;gap:7px 24px;margin:18px 0}.meta b{display:inline-block;min-width:90px}table{width:100%;border-collapse:collapse;margin-top:18px}th,td{border:1px solid #cbd6e2;padding:7px;text-align:left;vertical-align:top}th{background:#eaf1f8;font-size:10px;text-transform:uppercase}.number{text-align:right}.total{text-align:right;font-size:16px;margin-top:14px}.sign{display:grid;grid-template-columns:1fr 1fr;gap:55px;margin-top:65px}.line{border-top:1px solid #333;padding-top:6px;text-align:center}@media print{button{display:none}tr{page-break-inside:avoid}}</style></head><body><button onclick="window.print()">Print / Save as PDF</button><h1>REQUEST FOR QUOTATION</h1><h2>'+esc(companyName)+'</h2><div class="contact">Joseph Galve - 0926 224 2813</div><div class="meta"><div><b>Project:</b> '+esc(p.name||'')+'</div><div><b>Project Code:</b> '+esc(p.code||'')+'</div><div><b>Date:</b> '+esc(record.date||todayLocal())+'</div><div><b>RFQ No.:</b> '+esc(record.rfqNo||'')+'</div></div><table><thead><tr><th>No.</th><th>Item / Material</th><th>Supplier</th><th>Qty</th><th>Unit</th><th>RFQ Price</th><th>Total</th></tr></thead><tbody>'+body+'</tbody></table><div class="total"><b>Total RFQ Amount: '+money(total)+'</b></div><div class="sign"><div class="line">Prepared By</div><div class="line">Approved By</div></div></body></html>',popup=window.open('','_blank');if(!popup){alert('Please allow pop-ups to print the RFQ.');return}popup.document.write(doc);popup.document.close();popup.focus();setTimeout(()=>popup.print(),300);
@@ -4264,6 +4266,222 @@ body.dark-mode table tbody tr.pending-delete-row:hover > td{background:#5c303a!i
     if(tab==='payed')return table(['Date','Mode of Payment','Description / Reference','Amount Payed','Remarks','Actions'],(rows||[]).map(row=>[esc(row.date),esc(row.mode||row.entity||''),esc(row.description),`<b class="positive">${money(row.amount)}</b>`,esc(row.remarks),buttons('payed',row.id)]));
     return baseRecordTableWithoutPayedModeSummary.apply(this,arguments);
   };
+})();
+</script>
+<script>
+(function(){
+  const roundRfqTotal=value=>Math.round(Number(value)||0),wholeMoney=value=>'₱'+roundRfqTotal(value).toLocaleString('en-PH');
+  function normalizeRfqTotals(){
+    const modal=document.getElementById('rfqModal');
+    if(!modal||modal.dataset.wholeTotalsBound==='1')return;
+    modal.dataset.wholeTotalsBound='1';
+    const normalize=()=>{
+      const totals=[...modal.querySelectorAll('[data-rfq-total]')];
+      totals.forEach(cell=>{const value=wholeMoney(cell.textContent.replace(/[^0-9.-]/g,''));if(cell.textContent!==value)cell.textContent=value});
+      const grand=modal.querySelector('[data-rfq-grand-total]');
+      if(grand)grand.textContent=wholeMoney(totals.reduce((sum,cell)=>sum+roundRfqTotal(cell.textContent.replace(/[^0-9.-]/g,'')),0));
+    };
+    normalize();
+    modal.addEventListener('input',event=>{if(event.target.matches('[data-rfq-markup]'))setTimeout(normalize,0)});
+    modal.addEventListener('click',event=>{if(!event.target.closest('#saveRfqButton'))return;setTimeout(()=>{
+      const records=db.savedRfqs||[],record=records[records.length-1];
+      if(record?.project===projectId&&Array.isArray(record.rows)){record.rows.forEach(row=>{row.total=roundRfqTotal(row.total)});save()}
+    },0)});
+  }
+  new MutationObserver(normalizeRfqTotals).observe(document.body,{childList:true,subtree:true});
+  normalizeRfqTotals();
+})();
+</script>
+<script>
+(function(){
+  function closeWarrantyDialog(){document.getElementById('warrantyModal')?.remove()}
+  function warrantyItems(){
+    return linked('canvassing',projectId).flatMap(record=>canvassLines(record).map(line=>({item:String(line.item||''),qty:num(line.qty),unit:String(line.unit||''),supplier:String(line.supplier||record.supplier||'')}))).filter(row=>row.item&&row.qty>0);
+  }
+  function printWarranty(){
+    const modal=document.getElementById('warrantyModal'),form=modal?.querySelector('form');if(!form)return;
+    const fd=new FormData(form),date=String(fd.get('warrantyDate')||''),warrantyNo=String(fd.get('warrantyNo')||'').trim(),replacementDays=String(fd.get('replacementDays')||'').trim(),maintenanceDays=String(fd.get('maintenanceDays')||'').trim(),entity=String(fd.get('warrantyEntity')||'').trim();
+    if(!date||!warrantyNo||!replacementDays||!maintenanceDays||!entity){alert('Please complete all warranty fields.');return}
+    const rows=warrantyItems();if(!rows.length){alert('No canvassed items found for this project.');return}
+    const p=project()||{},companyRecord=(companies||[]).find(item=>String(item.id)===String(p.company)||String(item.name)===String(p.company))||(companies||[]).find(item=>String(item.id)===String(company))||{},companyName=companyRecord.name||p.company||'',logoUrl=new URL('assets/kindrich_consumer_goods_trading.png',location.href).href,body=rows.map((row,index)=>'<tr><td>'+String(index+1)+'</td><td>'+esc(row.item)+'</td><td>'+esc(row.supplier)+'</td><td class="number">'+String(row.qty)+'</td><td>'+esc(row.unit)+'</td></tr>').join(''),doc='<!doctype html><html><head><meta charset="utf-8"><title>Warranty - '+esc(warrantyNo)+'</title><style>body{font:13px Arial,sans-serif;color:#18283f;margin:30px}h1{margin:0;text-align:center;font-size:23px}h2{text-align:center;margin:4px 0 2px;font-size:16px}.contact{text-align:center;font-weight:700;margin-bottom:20px}.header{display:grid;grid-template-columns:140px 1fr 140px;align-items:center;gap:16px}.logo img{width:130px;height:90px;object-fit:contain}.heading{text-align:center}.meta{display:grid;grid-template-columns:1fr 1fr;gap:8px 22px;margin:22px 0}.meta b{display:inline-block;min-width:125px}table{width:100%;border-collapse:collapse;margin-top:18px}th,td{border:1px solid #cbd6e2;padding:8px;text-align:left;vertical-align:top}th{background:#eaf1f8;font-size:10px;text-transform:uppercase}.number{text-align:right}.terms{border:1px solid #cbd6e2;padding:12px;margin-top:18px;line-height:1.6}.sign{display:grid;grid-template-columns:1fr 1fr;gap:55px;margin-top:75px}.line{border-top:1px solid #333;padding-top:6px;text-align:center}@media print{button{display:none}.header{grid-template-columns:120px 1fr 120px}.logo img{width:110px;height:80px}}</style></head><body><button onclick="window.print()">Print / Save as PDF</button><div class="header"><div class="logo"><img src="'+logoUrl+'" alt="Company logo"></div><div class="heading"><h1>WARRANTY CERTIFICATE</h1><h2>'+esc(companyName)+'</h2><div class="contact">Joseph Galve - 0926 224 2813</div></div><div></div></div><div class="meta"><div><b>Warranty No.:</b> '+esc(warrantyNo)+'</div><div><b>Warranty Date:</b> '+esc(date)+'</div><div><b>Entity:</b> '+esc(entity)+'</div><div><b>Project:</b> '+esc(p.name||'')+'</div><div><b>Project Code:</b> '+esc(p.code||'')+'</div><div><b>Items Covered:</b> '+String(rows.length)+'</div></div><table><thead><tr><th>No.</th><th>Item / Material</th><th>Supplier</th><th>Qty</th><th>Unit</th></tr></thead><tbody>'+body+'</tbody></table><div class="terms"><b>Warranty Terms</b><br>Replacement coverage: '+esc(replacementDays)+' day(s) from the warranty date.<br>Maintenance coverage: '+esc(maintenanceDays)+' day(s) from the warranty date.<br>This warranty is issued to: '+esc(entity)+'.</div><div class="sign"><div class="line">Issued By</div><div class="line">Received By</div></div></body></html>',popup=window.open('','_blank');if(!popup){alert('Please allow pop-ups to generate the Warranty PDF.');return}popup.document.write(doc);popup.document.close();popup.focus();setTimeout(()=>popup.print(),300);
+  }
+  function openWarrantyDialog(){
+    const modal=document.createElement('div');modal.className='modal show';modal.id='warrantyModal';
+    modal.innerHTML='<div class="dialog warranty-dialog"><div style="display:flex;align-items:center;justify-content:space-between;gap:12px"><h3 style="margin:0">Generate Warranty PDF</h3><button type="button" class="btn secondary" id="closeWarrantyDialog" title="Close dialog" aria-label="Close dialog"><i class="bi bi-x-lg" aria-hidden="true"></i></button></div><p class="sub">Enter the warranty details before generating the printable PDF.</p><form><div class="form-grid"><div class="mini"><label>Warranty Date</label><input class="field" name="warrantyDate" type="date" value="'+esc(todayLocal())+'" required></div><div class="mini"><label>Warranty No.</label><input class="field" name="warrantyNo" placeholder="Warranty number" required></div><div class="mini"><label>No. of Days for Replacement</label><input class="field" name="replacementDays" type="number" min="0" step="1" placeholder="Example: 30" required></div><div class="mini"><label>No. of Days for Maintenance</label><input class="field" name="maintenanceDays" type="number" min="0" step="1" placeholder="Example: 90" required></div><div class="mini" style="grid-column:1/-1"><label>Entity</label><input class="field" name="warrantyEntity" placeholder="Entity / recipient" required></div></div><div class="foot"><button type="button" class="btn secondary" id="cancelWarrantyDialog">Cancel</button><button type="submit" class="btn" title="Generate Warranty PDF"><i class="bi bi-file-earmark-pdf" aria-hidden="true"></i> Generate PDF</button></div></form></div>';
+    document.body.appendChild(modal);modal.querySelector('#closeWarrantyDialog').onclick=closeWarrantyDialog;modal.querySelector('#cancelWarrantyDialog').onclick=closeWarrantyDialog;modal.onclick=event=>{if(event.target===modal)closeWarrantyDialog()};modal.querySelector('form').onsubmit=event=>{event.preventDefault();printWarranty()};
+  }
+  const baseDetailWithWarranty=detail;
+  detail=function(){
+    baseDetailWithWarranty.apply(this,arguments);
+    if(page!=='detail'||tab!=='canvassing')return;
+    const addButton=document.getElementById('addRow'),bar=addButton?.parentElement;if(!bar||document.getElementById('generateWarrantyButton'))return;
+    const button=document.createElement('button');button.className='btn secondary';button.type='button';button.id='generateWarrantyButton';button.title='Generate Warranty PDF';button.setAttribute('aria-label','Generate Warranty PDF');button.innerHTML='<i class="bi bi-shield-check" aria-hidden="true"></i> Generate Warranty PDF';button.onclick=openWarrantyDialog;bar.insertBefore(button,addButton);
+  };
+  const style=document.createElement('style');style.textContent='.warranty-dialog{width:min(760px,100%)}.warranty-dialog .form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.warranty-dialog .foot{justify-content:flex-end}@media(max-width:700px){.warranty-dialog .form-grid{grid-template-columns:1fr}}';document.head.appendChild(style);
+})();
+</script>
+<script>
+(function(){
+  db.warranties=Array.isArray(db.warranties)?db.warranties:[];
+  const baseApplyWarrantyWorkspace=applyFirebaseWorkspace;
+  applyFirebaseWorkspace=function(value){baseApplyWarrantyWorkspace(value);db.warranties=Array.isArray(db.warranties)?db.warranties:[]};
+  const warrantyNo=()=>{const p=project()||{},prefix=String(p.code||'PROJECT').replace(/[^A-Z0-9-]/gi,'').toUpperCase()||'PROJECT';return 'WAR-'+prefix+'-'+String(Date.now()).slice(-8)};
+  const warrantyRows=()=>linked('canvassing',projectId).flatMap(record=>canvassLines(record).map(line=>({item:String(line.item||''),qty:num(line.qty),unit:String(line.unit||''),supplier:String(line.supplier||record.supplier||'')}))).filter(row=>row.item&&row.qty>0);
+  function warrantyCompany(p){const record=(companies||[]).find(item=>String(item.id)===String(p.company)||String(item.name)===String(p.company))||(companies||[]).find(item=>String(item.id)===String(company))||{};return record.name||p.company||''}
+  function printWarrantyRecord(record){
+    const p=db.projects.find(item=>String(item.id)===String(record.project))||project()||{},rows=Array.isArray(record.rows)?record.rows:[],logoUrl=new URL('assets/kindrich_consumer_goods_trading.png',location.href).href,body=rows.map((row,index)=>'<tr><td>'+String(index+1)+'</td><td>'+esc(row.item||'')+'</td><td>'+esc(row.supplier||'')+'</td><td class="number">'+String(row.qty||0)+'</td><td>'+esc(row.unit||'')+'</td></tr>').join(''),doc='<!doctype html><html><head><meta charset="utf-8"><title>Warranty - '+esc(record.warrantyNo||'')+'</title><style>body{font:13px Arial,sans-serif;color:#18283f;margin:30px}h1{margin:0;text-align:center;font-size:23px}h2{text-align:center;margin:4px 0 2px;font-size:16px}.contact{text-align:center;font-weight:700;margin-bottom:20px}.header{display:grid;grid-template-columns:140px 1fr 140px;align-items:center;gap:16px}.logo img{width:130px;height:90px;object-fit:contain}.heading{text-align:center}.meta{display:grid;grid-template-columns:1fr 1fr;gap:8px 22px;margin:22px 0}.meta b{display:inline-block;min-width:125px}table{width:100%;border-collapse:collapse;margin-top:18px}th,td{border:1px solid #cbd6e2;padding:8px;text-align:left;vertical-align:top}th{background:#eaf1f8;font-size:10px;text-transform:uppercase}.number{text-align:right}.terms{border:1px solid #cbd6e2;padding:12px;margin-top:18px;line-height:1.6}.sign{display:grid;grid-template-columns:1fr 1fr;gap:55px;margin-top:75px}.line{border-top:1px solid #333;padding-top:6px;text-align:center}@media print{button{display:none}.header{grid-template-columns:120px 1fr 120px}.logo img{width:110px;height:80px}}</style></head><body><button onclick="window.print()">Print / Save as PDF</button><div class="header"><div class="logo"><img src="'+logoUrl+'" alt="Company logo"></div><div class="heading"><h1>WARRANTY CERTIFICATE</h1><h2>'+esc(warrantyCompany(p))+'</h2><div class="contact">Joseph Galve - 0926 224 2813</div></div><div></div></div><div class="meta"><div><b>Warranty No.:</b> '+esc(record.warrantyNo||'')+'</div><div><b>Warranty Date:</b> '+esc(record.date||'')+'</div><div><b>Entity:</b> '+esc(record.entity||'')+'</div><div><b>Project:</b> '+esc(p.name||'')+'</div><div><b>Project Code:</b> '+esc(p.code||'')+'</div><div><b>Items Covered:</b> '+String(rows.length)+'</div></div><table><thead><tr><th>No.</th><th>Item / Material</th><th>Supplier</th><th>Qty</th><th>Unit</th></tr></thead><tbody>'+body+'</tbody></table><div class="terms"><b>Warranty Terms</b><br>Replacement coverage: '+esc(record.replacementDays||'0')+' day(s) from the warranty date.<br>Maintenance coverage: '+esc(record.maintenanceDays||'0')+' day(s) from the warranty date.<br>This warranty is issued to: '+esc(record.entity||'')+'.</div><div class="sign"><div class="line">Issued By</div><div class="line">Received By</div></div></body></html>',popup=window.open('','_blank');if(!popup){alert('Please allow pop-ups to generate the Warranty PDF.');return}popup.document.write(doc);popup.document.close();popup.focus();setTimeout(()=>popup.print(),300);
+  }
+  function closeWarrantyDialog(){document.getElementById('warrantyModal')?.remove()}
+  function openSavedWarranties(){
+    const records=(db.warranties||[]).filter(record=>String(record.project)===String(projectId)).sort((a,b)=>String(b.createdAt||b.date||'').localeCompare(String(a.createdAt||a.date||''))),modal=document.createElement('div');modal.className='modal show';modal.id='savedWarrantyModal';
+    const body=records.length?records.map((record,index)=>`<tr><td class="row-number">${index+1}</td><td>${esc(record.warrantyNo||'')}</td><td>${esc(record.date||'')}</td><td>${esc(record.entity||'')}</td><td>${Array.isArray(record.rows)?record.rows.length:0}</td><td><span class="toolbar" style="gap:5px;display:inline-flex"><button class="btn secondary warranty-preview" type="button" title="Preview Warranty" aria-label="Preview Warranty"><i class="bi bi-eye" aria-hidden="true"></i></button><button class="btn danger warranty-delete" type="button" title="Delete Warranty" aria-label="Delete Warranty"><i class="bi bi-trash3" aria-hidden="true"></i></button></span></td></tr>`).join(''):'<tr><td colspan="6" class="empty">No saved warranties found for this project.</td></tr>';
+    modal.innerHTML=`<div class="dialog wide-dialog saved-warranty-dialog"><div style="display:flex;align-items:center;justify-content:space-between;gap:12px"><h3 style="margin:0">Saved Warranties</h3><button type="button" class="btn secondary" id="closeSavedWarrantyDialog" title="Close dialog" aria-label="Close dialog"><i class="bi bi-x-lg" aria-hidden="true"></i></button></div><p class="sub">Preview or delete previously generated warranty PDFs.</p><div class="scroll"><table><thead><tr><th class="row-number">No.</th><th>Warranty No.</th><th>Date</th><th>Entity</th><th>Items</th><th>Actions</th></tr></thead><tbody>${body}</tbody></table></div><div class="foot"><button type="button" class="btn secondary" id="cancelSavedWarrantyDialog">Close</button></div></div>`;
+    document.body.appendChild(modal);modal.querySelector('#closeSavedWarrantyDialog').onclick=()=>modal.remove();modal.querySelector('#cancelSavedWarrantyDialog').onclick=()=>modal.remove();modal.onclick=event=>{if(event.target===modal)modal.remove()};modal.querySelectorAll('.warranty-preview').forEach((button,index)=>button.onclick=()=>printWarrantyRecord(records[index]));modal.querySelectorAll('.warranty-delete').forEach((button,index)=>button.onclick=()=>{const record=records[index];if(!record||!confirm('Delete warranty '+(record.warrantyNo||'')+'?'))return;db.warranties=(db.warranties||[]).filter(item=>item.id!==record.id);writeLog('Delete','Warranty',record.warrantyNo||record.id);save();modal.remove();openSavedWarranties()});
+  }
+  function openWarrantyDialog(){
+    const modal=document.createElement('div');modal.className='modal show';modal.id='warrantyModal';
+    modal.innerHTML='<div class="dialog warranty-dialog"><div style="display:flex;align-items:center;justify-content:space-between;gap:12px"><h3 style="margin:0">Generate Warranty PDF</h3><button type="button" class="btn secondary" id="closeWarrantyDialog" title="Close dialog" aria-label="Close dialog"><i class="bi bi-x-lg" aria-hidden="true"></i></button></div><p class="sub">Warranty No. is generated automatically and the warranty will be saved when the PDF is generated.</p><form><div class="form-grid"><div class="mini"><label>Warranty Date</label><input class="field" name="warrantyDate" type="date" value="'+esc(todayLocal())+'" required></div><div class="mini"><label>Warranty No.</label><input class="field" name="warrantyNo" value="'+esc(warrantyNo())+'" readonly></div><div class="mini"><label>No. of Days for Replacement</label><input class="field" name="replacementDays" type="number" min="0" step="1" placeholder="Example: 30" required></div><div class="mini"><label>No. of Days for Maintenance</label><input class="field" name="maintenanceDays" type="number" min="0" step="1" placeholder="Example: 90" required></div><div class="mini" style="grid-column:1/-1"><label>Entity</label><input class="field" name="warrantyEntity" placeholder="Entity / recipient" required></div></div><div class="foot"><button type="button" class="btn secondary" id="cancelWarrantyDialog">Cancel</button><button type="submit" class="btn" title="Generate Warranty PDF"><i class="bi bi-file-earmark-pdf" aria-hidden="true"></i> Generate PDF</button></div></form></div>';
+    document.body.appendChild(modal);modal.querySelector('#closeWarrantyDialog').onclick=closeWarrantyDialog;modal.querySelector('#cancelWarrantyDialog').onclick=closeWarrantyDialog;modal.onclick=event=>{if(event.target===modal)closeWarrantyDialog()};modal.querySelector('form').onsubmit=event=>{event.preventDefault();const fd=new FormData(event.target),rows=warrantyRows();if(!rows.length){alert('No canvassed items found for this project.');return}const record={id:uid(),project:projectId,warrantyNo:String(fd.get('warrantyNo')||''),date:String(fd.get('warrantyDate')||''),replacementDays:num(fd.get('replacementDays')),maintenanceDays:num(fd.get('maintenanceDays')),entity:String(fd.get('warrantyEntity')||'').trim(),rows,createdAt:new Date().toISOString()};if(!record.entity||!record.date){alert('Please complete all warranty fields.');return}db.warranties.push(record);writeLog('Add','Warranty',record.warrantyNo);save();closeWarrantyDialog();notifySuccess('Warranty '+record.warrantyNo+' was saved.');printWarrantyRecord(record)};
+  }
+  document.addEventListener('click',event=>{const button=event.target.closest('#generateWarrantyButton');if(!button)return;event.preventDefault();event.stopImmediatePropagation();openWarrantyDialog()},true);
+  const baseDetailWithSavedWarranties=detail;
+  detail=function(){baseDetailWithSavedWarranties.apply(this,arguments);if(page!=='detail'||tab!=='canvassing')return;const addButton=document.getElementById('addRow'),bar=addButton?.parentElement;if(!bar||document.getElementById('savedWarrantyButton'))return;const button=document.createElement('button');button.className='btn secondary';button.type='button';button.id='savedWarrantyButton';button.title='Saved Warranties';button.setAttribute('aria-label','Saved Warranties');button.innerHTML='<i class="bi bi-folder2-open" aria-hidden="true"></i> Saved Warranties';button.onclick=openSavedWarranties;bar.insertBefore(button,addButton)};
+  const style=document.createElement('style');style.textContent='.warranty-dialog,.saved-warranty-dialog{width:min(760px,100%)}.warranty-dialog .form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.warranty-dialog .foot{justify-content:flex-end}.saved-warranty-dialog .scroll table{white-space:nowrap}@media(max-width:700px){.warranty-dialog .form-grid{grid-template-columns:1fr}.warranty-dialog .form-grid .mini[style*="grid-column"]{grid-column:auto!important}}';document.head.appendChild(style);
+})();
+</script>
+<script>
+(function(){
+  function purchaseWarrantyRows(){
+    const ids=new Set([...document.querySelectorAll('#records [data-purchase-select]:checked')].map(input=>String(input.value)));
+    return (db.purchases||[]).filter(record=>ids.has(String(record.id))).map(record=>{const item=purchaseItem(record)||{};return {item:String(record.item||record.description||item.description||''),qty:num(record.qty),unit:String(record.unit||item.unit||''),supplier:String(record.supplier||record.purchasedBy||'')};}).filter(row=>row.item&&row.qty>0);
+  }
+  function purchaseWarrantyNo(){const p=project()||{},prefix=String(p.code||'PROJECT').replace(/[^A-Z0-9-]/gi,'').toUpperCase()||'PROJECT';return 'WAR-'+prefix+'-'+String(Date.now()).slice(-8)}
+  function purchaseWarrantyCompany(p){const record=(companies||[]).find(item=>String(item.id)===String(p.company)||String(item.name)===String(p.company))||(companies||[]).find(item=>String(item.id)===String(company))||{};return record.name||p.company||''}
+  function printPurchaseWarranty(record){
+    const p=db.projects.find(item=>String(item.id)===String(record.project))||project()||{},rows=Array.isArray(record.rows)?record.rows:[],logoUrl=new URL('assets/kindrich_consumer_goods_trading.png',location.href).href,body=rows.map((row,index)=>'<tr><td>'+String(index+1)+'</td><td>'+esc(row.item||'')+'</td><td>'+esc(row.supplier||'')+'</td><td class="number">'+String(row.qty||0)+'</td><td>'+esc(row.unit||'')+'</td></tr>').join(''),doc='<!doctype html><html><head><meta charset="utf-8"><title>Warranty - '+esc(record.warrantyNo||'')+'</title><style>body{font:13px Arial,sans-serif;color:#18283f;margin:30px}h1{margin:0;text-align:center;font-size:23px}h2{text-align:center;margin:4px 0 2px;font-size:16px}.contact{text-align:center;font-weight:700;margin-bottom:20px}.header{display:grid;grid-template-columns:140px 1fr 140px;align-items:center;gap:16px}.logo img{width:130px;height:90px;object-fit:contain}.heading{text-align:center}.meta{display:grid;grid-template-columns:1fr 1fr;gap:8px 22px;margin:22px 0}.meta b{display:inline-block;min-width:125px}table{width:100%;border-collapse:collapse;margin-top:18px}th,td{border:1px solid #cbd6e2;padding:8px;text-align:left;vertical-align:top}th{background:#eaf1f8;font-size:10px;text-transform:uppercase}.number{text-align:right}.terms{border:1px solid #cbd6e2;padding:12px;margin-top:18px;line-height:1.6}.sign{display:grid;grid-template-columns:1fr 1fr;gap:55px;margin-top:75px}.line{border-top:1px solid #333;padding-top:6px;text-align:center}@media print{button{display:none}.header{grid-template-columns:120px 1fr 120px}.logo img{width:110px;height:80px}}</style></head><body><button onclick="window.print()">Print / Save as PDF</button><div class="header"><div class="logo"><img src="'+logoUrl+'" alt="Company logo"></div><div class="heading"><h1>WARRANTY CERTIFICATE</h1><h2>'+esc(purchaseWarrantyCompany(p))+'</h2><div class="contact">Joseph Galve - 0926 224 2813</div></div><div></div></div><div class="meta"><div><b>Warranty No.:</b> '+esc(record.warrantyNo||'')+'</div><div><b>Warranty Date:</b> '+esc(record.date||'')+'</div><div><b>Entity:</b> '+esc(record.entity||'')+'</div><div><b>Project:</b> '+esc(p.name||'')+'</div><div><b>Project Code:</b> '+esc(p.code||'')+'</div><div><b>Items Covered:</b> '+String(rows.length)+'</div></div><table><thead><tr><th>No.</th><th>Item / Material</th><th>Purchased By</th><th>Qty</th><th>Unit</th></tr></thead><tbody>'+body+'</tbody></table><div class="terms"><b>Warranty Terms</b><br>Replacement coverage: '+esc(record.replacementDays||'0')+' day(s) from the warranty date.<br>Maintenance coverage: '+esc(record.maintenanceDays||'0')+' day(s) from the warranty date.<br>This warranty is issued to: '+esc(record.entity||'')+'.</div><div class="sign"><div class="line">Issued By</div><div class="line">Received By</div></div></body></html>',popup=window.open('','_blank');if(!popup){alert('Please allow pop-ups to generate the Warranty PDF.');return}popup.document.write(doc);popup.document.close();popup.focus();setTimeout(()=>popup.print(),300);
+  }
+  function closePurchaseWarrantyDialog(){document.getElementById('warrantyModal')?.remove()}
+  function openPurchaseWarrantyDialog(){
+    const rows=purchaseWarrantyRows();if(!rows.length){alert('Select at least one purchased item to generate a warranty.');return}
+    const modal=document.createElement('div');modal.className='modal show';modal.id='warrantyModal';
+    modal.innerHTML='<div class="dialog warranty-dialog"><div style="display:flex;align-items:center;justify-content:space-between;gap:12px"><h3 style="margin:0">Generate Warranty PDF</h3><button type="button" class="btn secondary" id="closePurchaseWarrantyDialog" title="Close dialog" aria-label="Close dialog"><i class="bi bi-x-lg" aria-hidden="true"></i></button></div><p class="sub">Warranty No. is generated automatically. Selected purchased items will be saved with this warranty.</p><form><div class="form-grid"><div class="mini"><label>Warranty Date</label><input class="field" name="warrantyDate" type="date" value="'+esc(todayLocal())+'" required></div><div class="mini"><label>Warranty No.</label><input class="field" name="warrantyNo" value="'+esc(purchaseWarrantyNo())+'" readonly></div><div class="mini"><label>No. of Days for Replacement</label><input class="field" name="replacementDays" type="number" min="0" step="1" placeholder="Example: 30" required></div><div class="mini"><label>No. of Days for Maintenance</label><input class="field" name="maintenanceDays" type="number" min="0" step="1" placeholder="Example: 90" required></div><div class="mini" style="grid-column:1/-1"><label>Entity</label><input class="field" name="warrantyEntity" placeholder="Entity / recipient" required></div></div><div class="sub" style="margin-top:12px">Selected items: '+String(rows.length)+'</div><div class="foot"><button type="button" class="btn secondary" id="cancelPurchaseWarrantyDialog">Cancel</button><button type="submit" class="btn" title="Generate Warranty PDF"><i class="bi bi-file-earmark-pdf" aria-hidden="true"></i> Generate PDF</button></div></form></div>';
+    document.body.appendChild(modal);modal.querySelector('#closePurchaseWarrantyDialog').onclick=closePurchaseWarrantyDialog;modal.querySelector('#cancelPurchaseWarrantyDialog').onclick=closePurchaseWarrantyDialog;modal.onclick=event=>{if(event.target===modal)closePurchaseWarrantyDialog()};modal.querySelector('form').onsubmit=event=>{event.preventDefault();const fd=new FormData(event.target),record={id:uid(),project:projectId,warrantyNo:String(fd.get('warrantyNo')||''),date:String(fd.get('warrantyDate')||''),replacementDays:num(fd.get('replacementDays')),maintenanceDays:num(fd.get('maintenanceDays')),entity:String(fd.get('warrantyEntity')||'').trim(),rows,createdAt:new Date().toISOString()};if(!record.entity||!record.date){alert('Please complete all warranty fields.');return}db.warranties=Array.isArray(db.warranties)?db.warranties:[];db.warranties.push(record);writeLog('Add','Warranty',record.warrantyNo);save();closePurchaseWarrantyDialog();notifySuccess('Warranty '+record.warrantyNo+' was saved.');printPurchaseWarranty(record)};
+  }
+  function showPurchaseWarranties(){
+    const records=(db.warranties||[]).filter(record=>String(record.project)===String(projectId)).sort((a,b)=>String(b.createdAt||b.date||'').localeCompare(String(a.createdAt||a.date||''))),modal=document.createElement('div');modal.className='modal show';modal.id='savedWarrantyModal';
+    const body=records.length?records.map((record,index)=>`<tr><td class="row-number">${index+1}</td><td>${esc(record.warrantyNo||'')}</td><td>${esc(record.date||'')}</td><td>${esc(record.entity||'')}</td><td>${Array.isArray(record.rows)?record.rows.length:0}</td><td><span class="toolbar" style="gap:5px;display:inline-flex"><button class="btn secondary saved-purchase-warranty-preview" type="button" title="Preview Warranty" aria-label="Preview Warranty"><i class="bi bi-eye" aria-hidden="true"></i></button><button class="btn danger saved-purchase-warranty-delete" type="button" title="Delete Warranty" aria-label="Delete Warranty"><i class="bi bi-trash3" aria-hidden="true"></i></button></span></td></tr>`).join(''):'<tr><td colspan="6" class="empty">No saved warranties found for this project.</td></tr>';
+    modal.innerHTML=`<div class="dialog wide-dialog saved-warranty-dialog"><div style="display:flex;align-items:center;justify-content:space-between;gap:12px"><h3 style="margin:0">Saved Warranties</h3><button type="button" class="btn secondary" id="closeSavedPurchaseWarranty" title="Close dialog" aria-label="Close dialog"><i class="bi bi-x-lg" aria-hidden="true"></i></button></div><p class="sub">Preview or delete previously generated warranties.</p><div class="scroll"><table><thead><tr><th class="row-number">No.</th><th>Warranty No.</th><th>Date</th><th>Entity</th><th>Items</th><th>Actions</th></tr></thead><tbody>${body}</tbody></table></div><div class="foot"><button type="button" class="btn secondary" id="cancelSavedPurchaseWarranty">Close</button></div></div>`;
+    document.body.appendChild(modal);modal.querySelector('#closeSavedPurchaseWarranty').onclick=()=>modal.remove();modal.querySelector('#cancelSavedPurchaseWarranty').onclick=()=>modal.remove();modal.onclick=event=>{if(event.target===modal)modal.remove()};modal.querySelectorAll('.saved-purchase-warranty-preview').forEach((button,index)=>button.onclick=()=>printPurchaseWarranty(records[index]));modal.querySelectorAll('.saved-purchase-warranty-delete').forEach((button,index)=>button.onclick=()=>{const record=records[index];if(!record||!confirm('Delete warranty '+(record.warrantyNo||'')+'?'))return;db.warranties=(db.warranties||[]).filter(item=>item.id!==record.id);writeLog('Delete','Warranty',record.warrantyNo||record.id);save();modal.remove();showPurchaseWarranties()});
+  }
+  document.addEventListener('click',event=>{const button=event.target.closest('#purchasedGenerateWarrantyButton');if(!button)return;event.preventDefault();event.stopImmediatePropagation();openPurchaseWarrantyDialog()},true);
+  const baseDetailForPurchasedWarranty=detail;
+  detail=function(){
+    baseDetailForPurchasedWarranty.apply(this,arguments);
+    document.getElementById('generateWarrantyButton')?.remove();
+    if(page!=='detail'||tab!=='purchases')return;
+    const addButton=document.getElementById('addRow'),bar=addButton?.parentElement;if(!bar||document.getElementById('purchasedGenerateWarrantyButton'))return;
+    const button=document.createElement('button');button.className='btn secondary';button.type='button';button.id='purchasedGenerateWarrantyButton';button.title='Generate Warranty PDF from selected purchased items';button.setAttribute('aria-label','Generate Warranty PDF');button.innerHTML='<i class="bi bi-shield-check" aria-hidden="true"></i> Generate Warranty PDF';bar.insertBefore(button,addButton);
+    const saved=document.createElement('button');saved.className='btn secondary';saved.type='button';saved.id='purchasedSavedWarrantyButton';saved.title='Saved Warranties';saved.setAttribute('aria-label','Saved Warranties');saved.innerHTML='<i class="bi bi-folder2-open" aria-hidden="true"></i> Saved Warranties';saved.onclick=showPurchaseWarranties;bar.insertBefore(saved,button);
+  };
+})();
+</script>
+<script>
+(function(){
+  const nativeOpen=window.open;
+  window.open=function(){
+    const popup=nativeOpen.apply(window,arguments);
+    if(!popup?.document)return popup;
+    const nativeWrite=popup.document.write.bind(popup.document);
+    popup.document.write=function(html){
+      let output=String(html||'');
+      if(/WARRANTY CERTIFICATE/i.test(output)){
+        const replacement=(output.match(/Replacement coverage:\s*([\s\S]*?)\s*day\(s\)/i)||[])[1]||'the stated period',maintenance=(output.match(/Maintenance coverage:\s*([\s\S]*?)\s*day\(s\)/i)||[])[1]||'the stated period',entity=(output.match(/This warranty is issued to:\s*([\s\S]*?)\.<\/div>/i)||[])[1]||'the named entity';
+        output=output.replace(/<\/style>/i,'.certificate-intro{border:1px solid #cbd6e2;background:#f8fafc;padding:13px;margin:18px 0;line-height:1.6;text-align:justify}.terms h3{margin:0 0 8px;font-size:14px}.terms ol{margin:7px 0 0 20px;padding:0}.terms li{margin:5px 0}.notice{font-size:11px;color:#52657b;margin-top:10px}@media print{.certificate-intro{background:#fff}}<\/style>');
+        output=output.replace(/(<\/div><div class="meta">)/i,'</div><div class="certificate-intro"><b>Certificate Statement</b><br>This Warranty Certificate confirms that the items identified below were supplied to the named entity for the project stated herein. The warranty is subject to the terms and conditions set out in this certificate and becomes effective on the Warranty Date.</div><div class="meta">');
+        output=output.replace(/<div class="terms">[\s\S]*?<\/div>/i,'<div class="terms"><h3>Warranty Terms and Conditions</h3><ol><li><b>Coverage Period.</b> Replacement coverage is valid for '+replacement+' day(s), and maintenance coverage is valid for '+maintenance+' day(s), commencing on the Warranty Date.</li><li><b>Scope of Warranty.</b> The warranty applies only to the items listed in this certificate and issued to '+entity+'.</li><li><b>Claim Procedure.</b> The warranty holder must present this certificate and promptly notify the issuing company of any suspected defect or service requirement. The item may be inspected before any remedy is approved.</li><li><b>Remedy.</b> Subject to inspection and verification, the issuing company may repair or replace the affected item or provide another remedy agreed in writing by the parties.</li><li><b>Exclusions.</b> This warranty does not cover misuse, improper handling or storage, unauthorized alteration or repair, normal wear and tear, accidental damage, or damage caused by events beyond reasonable control.</li><li><b>Transfer and Validity.</b> This certificate is valid only for the entity named above and is not transferable without written approval. Any amendment must be made in writing and authorized by the issuing company.</li></ol><div class="notice">This certificate should be retained as proof of warranty coverage. Questions or claims may be directed to Joseph Galve - 0926 224 2813.</div></div>');
+      }
+      return nativeWrite(output);
+    };
+    return popup;
+  };
+})();
+</script>
+<script>
+(function(){
+  const nativeOpen=window.open;
+  window.open=function(){
+    const popup=nativeOpen.apply(window,arguments);
+    if(!popup?.document)return popup;
+    const nativeWrite=popup.document.write.bind(popup.document);
+    popup.document.write=function(html){
+      const result=nativeWrite(html);
+      if(/WARRANTY CERTIFICATE/i.test(String(html||'')))setTimeout(()=>{if(popup.document.body)popup.document.body.innerHTML=popup.document.body.innerHTML.replace(/Maintenance/gi,'Service Warranty')},0);
+      return result;
+    };
+    return popup;
+  };
+  function updateWarrantyLabels(){
+    document.querySelectorAll('#warrantyModal label,#warrantyModal .sub').forEach(element=>{if(!element.dataset.serviceWarrantyLabel)element.textContent=element.textContent.replace(/Maintenance/gi,'Service Warranty'),element.dataset.serviceWarrantyLabel='1'});
+  }
+  new MutationObserver(updateWarrantyLabels).observe(document.body,{childList:true,subtree:true});
+  updateWarrantyLabels();
+})();
+</script>
+<script>
+(function(){
+  const nativeOpen=window.open;
+  window.open=function(){
+    const popup=nativeOpen.apply(window,arguments);
+    if(!popup?.document)return popup;
+    const nativeWrite=popup.document.write.bind(popup.document);
+    popup.document.write=function(html){
+      const result=nativeWrite(html);
+      if(/WARRANTY CERTIFICATE/i.test(String(html||'')))setTimeout(()=>{
+        popup.document.querySelectorAll('table').forEach(table=>{
+          const header=[...table.rows[0]?.cells||[]].findIndex(cell=>cell.textContent.trim().toLowerCase()==='purchased by');
+          if(header>=0)[...table.rows].forEach(row=>{if(row.cells[header])row.deleteCell(header)});
+        });
+      },0);
+      return result;
+    };
+    return popup;
+  };
+})();
+</script>
+<script>
+(function(){
+  function endDateText(date,replacement,service){
+    const parsed=new Date(String(date||'')+'T00:00:00');if(Number.isNaN(parsed.getTime()))return '';
+    parsed.setDate(parsed.getDate()+Math.max(Number(replacement)||0,Number(service)||0));
+    return `${parsed.getFullYear()}-${String(parsed.getMonth()+1).padStart(2,'0')}-${String(parsed.getDate()).padStart(2,'0')}`;
+  }
+  const nativeOpen=window.open;
+  window.open=function(){
+    const popup=nativeOpen.apply(window,arguments);
+    if(!popup?.document)return popup;
+    const nativeWrite=popup.document.write.bind(popup.document);
+    popup.document.write=function(html){
+      const result=nativeWrite(html);
+      if(/WARRANTY CERTIFICATE/i.test(String(html||'')))setTimeout(()=>{
+        const body=popup.document.body;if(!body)return;
+        let output=body.innerHTML.replace(/Warranty Date:/gi,'Warranty Issued Date:');
+        const issued=(output.match(/Warranty Issued Date:<\/b>\s*([^<]*)/i)||[])[1]?.trim()||'';
+        const replacement=(output.match(/Replacement coverage[^0-9]*([0-9,]+)\s*day\(s\)/i)||[])[1]||'0',service=(output.match(/(?:Service Warranty|maintenance) coverage[^0-9]*([0-9,]+)\s*day\(s\)/i)||[])[1]||'0',end=endDateText(issued.replace(/<[^>]+>/g,''),replacement.replace(/,/g,''),service.replace(/,/g,''));
+        if(end&&!/Warranty End Date:/i.test(output))output=output.replace(/(<div><b>Warranty Issued Date:<\/b>[^<]*<\/div>)/i,'$1<div><b>Warranty End Date:</b> '+end+'</div>');
+        output=output.replace(/(<div><b>Entity:<\/b>\s*)([^<]*)(<\/div>)/i,'$1<strong class="warranty-highlight">$2</strong>$3');
+        output=output.replace(/(\d[\d,]*\s*day\(s\))/gi,'<strong class="warranty-highlight">$1</strong>');
+        body.innerHTML=output;
+        popup.document.head?.insertAdjacentHTML('beforeend','<style>.warranty-highlight{font-weight:800}.meta div:has(.warranty-highlight){font-size:13px}</style>');
+      },0);
+      return result;
+    };
+    return popup;
+  };
+  function updateWarrantyDateLabels(){
+    document.querySelectorAll('#warrantyModal label,#warrantyModal .sub').forEach(element=>{if(!element.dataset.issuedDateLabel){element.textContent=element.textContent.replace(/Warranty Date/gi,'Warranty Issued Date');element.dataset.issuedDateLabel='1'}});
+  }
+  new MutationObserver(updateWarrantyDateLabels).observe(document.body,{childList:true,subtree:true});
+  updateWarrantyDateLabels();
 })();
 </script>
 </body>
