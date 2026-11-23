@@ -4484,6 +4484,46 @@ body.dark-mode table tbody tr.pending-delete-row:hover > td{background:#5c303a!i
   updateWarrantyDateLabels();
 })();
 </script>
+<script>
+(function(){
+  const nativeOpen=window.open;
+  window.open=function(){
+    const popup=nativeOpen.apply(window,arguments);
+    if(!popup?.document)return popup;
+    const nativeWrite=popup.document.write.bind(popup.document);
+    popup.document.write=function(html){
+      const result=nativeWrite(html);
+      if(/Delivery Form/i.test(String(html||'')))setTimeout(()=>{
+        const sign=popup.document.querySelector('.sign');if(!sign)return;
+        sign.innerHTML='<div class="signature-row"><div class="signature-field"><span class="signature-rule"></span><span>Released By</span></div><div class="signature-field"><span class="signature-rule"></span><span>Date</span></div></div><div class="signature-row"><div class="signature-field"><span class="signature-rule"></span><span>Delivered By</span></div><div class="signature-field"><span class="signature-rule"></span><span>Date</span></div></div><div class="signature-row"><div class="signature-field"><span class="signature-rule"></span><span>Received By (Entity)</span></div><div class="signature-field"><span class="signature-rule"></span><span>Date</span></div></div>';
+        popup.document.head?.insertAdjacentHTML('beforeend','<style>.sign{display:grid;grid-template-columns:1fr;gap:28px;margin-top:45px}.signature-row{display:grid;grid-template-columns:250px 165px;justify-content:start;gap:18px;align-items:start}.signature-field{text-align:left;font-size:13px;font-weight:700}.signature-rule{display:block;border-top:1px solid #333;margin-bottom:6px;height:1px}.signature-row .signature-field:first-child .signature-rule{margin-left:0;margin-right:0}.signature-row .signature-field:last-child .signature-rule{margin-left:0;margin-right:0}@media(max-width:600px){.signature-row{grid-template-columns:minmax(0,1fr) 135px;gap:12px}}</style>');
+      },0);
+      return result;
+    };
+    return popup;
+  };
+})();
+</script>
+<script>
+(function(){
+  const nativeOpen=window.open,normalize=value=>String(value??'').toLowerCase().replace(/[^a-z0-9]/g,'');
+  window.open=function(){
+    const popup=nativeOpen.apply(window,arguments);
+    if(!popup?.document)return popup;
+    const nativeWrite=popup.document.write.bind(popup.document);
+    popup.document.write=function(html){
+      const result=nativeWrite(html);
+      if(/Delivery Form/i.test(String(html||'')))setTimeout(()=>{
+        const table=popup.document.querySelector('table'),summary=popup.document.querySelector('.summary b');if(!table||!summary)return;
+        const boqItems=linked('items',projectId).filter(item=>!item.deleted),total=[...table.tBodies[0]?.rows||[]].reduce((sum,row)=>{const cells=row.cells||[],item=boqItems.find(value=>normalize(value.description)===normalize(cells[0]?.textContent)),qty=num(cells[1]?.textContent);return sum+qty*itemPoMc(item)},0);
+        summary.textContent='Total Delivery Amount: '+money(total);
+      },0);
+      return result;
+    };
+    return popup;
+  };
+})();
+</script>
 </body>
 </html>
 
