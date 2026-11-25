@@ -55,7 +55,7 @@ assert.match(html, /actorUid/);
 assert.match(migrationRules, /request\.resource\.data\.actorUid == request\.auth\.uid/);
 assert.doesNotMatch(html, /data-auth-migration-status[^>]*>[^<]*password/i);
 assert.doesNotMatch(html, /password:'admin'/);
-assert.match(rules, /allow read, write: if true/);
+assert.match(rules, /allow read, write: if request\.auth != null/);
 assert.match(migrationRules, /request\.auth != null/);
 assert.match(migrationRules, /function canAccessCompany/);
 assert.match(deployGuard, /Firestore deploy blocked/);
