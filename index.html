@@ -4,6 +4,26 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>KINDRICH | Project Cost Monitoring</title>
+<style>
+  #kindrichLoadingOverlay{position:fixed;inset:0;z-index:99999;display:none;align-items:center;justify-content:center;background:rgba(6,12,28,.48);backdrop-filter:blur(2px)}
+  #kindrichLoadingOverlay.show{display:flex}
+  #kindrichLoadingOverlay .loading-box{display:flex;align-items:center;gap:10px;padding:13px 18px;border:1px solid #32456d;border-radius:10px;background:#101e3e;color:#eef4ff;box-shadow:0 14px 45px rgba(0,0,0,.32);font:600 13px Arial,sans-serif}
+  #kindrichLoadingOverlay .loading-spinner{width:18px;height:18px;border:3px solid rgba(255,255,255,.28);border-top-color:#63d1ff;border-radius:50%;animation:kindrichLoadingSpin .75s linear infinite}
+  @keyframes kindrichLoadingSpin{to{transform:rotate(360deg)}}
+</style>
+<script>
+  (function(){
+    let pending=0;
+    function overlay(){
+      let element=document.getElementById('kindrichLoadingOverlay');
+      if(element)return element;
+      element=document.createElement('div');element.id='kindrichLoadingOverlay';element.setAttribute('aria-live','polite');element.setAttribute('aria-busy','true');element.innerHTML='<div class="loading-box"><span class="loading-spinner" aria-hidden="true"></span><span data-loading-message>Loading data...</span></div>';
+      (document.body||document.documentElement).appendChild(element);return element;
+    }
+    window.kindrichLoadingStart=function(message){pending++;let element=overlay();element.querySelector('[data-loading-message]').textContent=message||'Loading data...';element.classList.add('show');element.setAttribute('aria-busy','true')};
+    window.kindrichLoadingEnd=function(){pending=Math.max(0,pending-1);if(!pending){let element=document.getElementById('kindrichLoadingOverlay');if(element){element.classList.remove('show');element.setAttribute('aria-busy','false')}}};
+  })();
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -124,7 +144,7 @@ function projectRetentionAmount(p){return num(p?.retentionAmount)||num(p?.budget
 function projectTaxAmount(p){return num(p?.taxAmount)}
 function expenseCategories(){return [...new Set((db.categories||[]).filter(Boolean))].sort((a,b)=>a.localeCompare(b))}
 function totals(p){let id=p?.id,materials=linked('purchases',id).reduce((a,x)=>a+purchaseAmount(x),0),cashout=linked('purchases',id).filter(x=>/cashout/i.test(String(x.remarks||''))).reduce((a,x)=>a+purchaseAmount(x),0),labor=linked('manpower',id).filter(isApprovedManpower).reduce((a,x)=>a+manpowerAmount(x),0),other=linked('expenses',id).reduce((a,x)=>a+num(x.amount),0),forwardedIn=linked('forwarded',id).filter(x=>x.direction==='in').reduce((a,x)=>a+num(x.amount),0),forwardedOut=linked('forwarded',id).filter(x=>x.direction==='out').reduce((a,x)=>a+num(x.amount),0),payed=linked('payed',id).reduce((a,x)=>a+num(x.amount),0),tax=projectTaxAmount(p),total=materials+labor+other+forwardedIn-forwardedOut,balance=num(p?.budget)-tax-total-cashout,manpowerBudget=num(p?.manpowerBudget)||num(p?.budget)*.4;return {materials,cashout,labor,other,forwardedIn,forwardedOut,payed,tax,total,balance,manpowerBalance:manpowerBudget-labor}}
-function canvassLines(x){let lines=Array.isArray(x.lines)&&x.lines.length?x.lines:[{itemId:x.itemId,item:x.item,qty:x.qty,unit:x.unit,unitCost:x.unitCost,additionalAmount:x.additionalAmount,amount:x.amount,additionalRemarks:x.additionalRemarks,remarks:x.remarks,supplier:x.supplier}];return lines.map(line=>{let item=linked('items',x.project||projectId).find(i=>i.id===line.itemId)||linked('items',x.project||projectId).find(i=>i.description===line.item)||{};let qty=num(line.qty),unitCost=num(line.unitCost)||itemPoMc(item),additionalAmount=num(line.additionalAmount),amount=num(line.amount)||qty*unitCost+additionalAmount;return {...line,itemId:line.itemId||item.id||'',item:line.item||item.description||'',supplier:String(line.supplier||x.supplier||'').trim(),qty,unit:line.unit||item.unit||'',unitCost,additionalAmount,amount,additionalRemarks:line.additionalRemarks||'',remarks:line.remarks||''}})}
+function canvassLines(x){let lines=Array.isArray(x.lines)&&x.lines.length?x.lines:[{itemId:x.itemId,item:x.item,qty:x.qty,unit:x.unit,unitCost:x.unitCost,additionalAmount:x.additionalAmount,amount:x.amount,additionalRemarks:x.additionalRemarks,remarks:x.remarks,supplier:x.supplier}];return lines.map(line=>{let item=linked('items',x.project||projectId).find(i=>i.id===line.itemId)||linked('items',x.project||projectId).find(i=>i.description===line.item)||{},hasUnitCost=line.unitCost!==undefined&&line.unitCost!==null&&String(line.unitCost).trim()!=='',hasAmount=line.amount!==undefined&&line.amount!==null&&String(line.amount).trim()!=='',qty=num(line.qty),unitCost=hasUnitCost?num(line.unitCost):0,additionalAmount=num(line.additionalAmount),amount=hasAmount?num(line.amount):qty*unitCost+additionalAmount;return {...line,itemId:line.itemId||item.id||'',item:line.item||item.description||'',supplier:String(line.supplier||x.supplier||'').trim(),qty,unit:line.unit||item.unit||'',unitCost,additionalAmount,amount,additionalRemarks:line.additionalRemarks||'',remarks:line.remarks||''}})}
 function canvassTotal(x){return canvassLines(x).reduce((a,line)=>a+num(line.amount),0)}
 function canvassDetails(x){let lines=canvassLines(x);return `<div style="min-width:360px">${lines.map(line=>`<div><b>${esc(line.item)}</b> - ${num(line.qty)} ${esc(line.unit)} x ${money(line.unitCost)}${num(line.additionalAmount)?` + ${money(line.additionalAmount)}`:''} = <b>${money(line.amount)}</b>${line.additionalRemarks?`<div class="sub">${esc(line.additionalRemarks)}</div>`:''}${line.remarks?`<div class="sub">${esc(line.remarks)}</div>`:''}</div>`).join('<hr style="border:0;border-top:1px solid #e5edf5;margin:7px 0">')}</div>`}
 const specs={project:[['company','Company','company'],['code','Project Code','text'],['name','Project Name','text'],['client','Client / Customer','text'],['location','Location','text'],['start','Start Date','date'],['durationDays','Number of Days','number'],['extensionDays','Time Extension Days','number'],['end','Target End Date','date'],['budget','Contract / Project Budget (₱)','number'],['retentionPercent','Retention %','number'],['retentionAmount','Retention Amount (₱)','number'],['taxAmount','Tax Amount (₱)','number'],['manpowerBudget','Manpower Budget (₱)','number'],['status','Status','status'],['details','Project Details / Scope','textarea']],items:[['category','Category','text'],['description','Item / Material','text'],['unit','Unit','text'],['poQty','Actual P.O Qty','number'],['poMc','Actual P.O Unit Cost (₱)','number'],['remarks','Remarks','textarea']],purchases:[['itemId','Item / Material','itemRef'],['purchaseNo','Purchase No.','purchaseNo'],['date','Purchase Date','date'],['voucherNo','Voucher No. (Optional)','text'],['qty','Quantity','number'],['unitCost','Item Cost (₱)','number'],['amount','Total Amount (₱)','number'],['remarks','Remarks','textarea']],manpower:[['date','Date','date'],['name','Worker / Crew','text'],['role','Role / Work','text'],['days','Days / Units','number'],['rate','Rate (₱)','number'],['remarks','Remarks','textarea']],expenses:[['date','Date','date'],['voucherNo','Voucher No. (Optional)','text'],['category','Category','categoryList'],['description','Expense Description','text'],['amount','Amount (₱)','number'],['remarks','Remarks','textarea']],canvassing:[['date','Date','date'],['itemId','Item / Material','canvassItemRef'],['supplier','Supplier','text'],['qty','Qty','number'],['unit','Unit','text'],['unitCost','Unit Price (₱)','number'],['additionalAmount','Additional Amount (₱)','number'],['amount','Total Amount (₱)','number'],['additionalRemarks','Additional Remarks','textarea'],['remarks','Remarks','textarea']],vouchering:[['date','Voucher Date','date'],['voucherNo','Voucher No.','text'],['payee','Payee','text'],['description','Description / Purpose','text'],['amount','Amount (₱)','number'],['status','Status','voucherStatus'],['remarks','Remarks','textarea']],payed:[['date','Payment Date','date'],['mode','Mode of Payment','text'],['description','Description / Reference','text'],['amount','Amount Payed (₱)','number'],['remarks','Remarks','textarea']]};
@@ -414,6 +434,20 @@ try {
 }
 const workspaceRef = doc(firestore, "workspaces", "main");
 const plannerEventsRef = collection(firestore, "plannerEvents");
+const adsenseScriptId = "kindrich-adsense-loader";
+function applyFirebaseAdsSetting(workspace){
+  const enabled = workspace?.adsEnabled === true;
+  const existing = document.getElementById(adsenseScriptId);
+  if(!enabled){ existing?.remove(); return; }
+  if(existing)return;
+  const script=document.createElement("script");
+  script.id=adsenseScriptId;
+  script.async=true;
+  script.src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6382566869746872";
+  script.crossOrigin="anonymous";
+  document.head.appendChild(script);
+}
+applyFirebaseAdsSetting(null);
 const diagnosticsEnabled = ['localhost','127.0.0.1'].includes(location.hostname);
 const firestoreDiagnostics = {reads:0,documentsRead:0,writes:0,writeFailures:0,queries:{},listeners:0,listenerEvents:0,slowestQueryMs:0};
 function diagnosticQuery(key,kind,started,count=0){
@@ -427,8 +461,8 @@ function diagnosticQuery(key,kind,started,count=0){
   firestoreDiagnostics.queries[key]=entry;
   if(diagnosticsEnabled)console.debug('[Firestore]',kind,key,{durationMs:Math.round(duration),documents:count});
 }
-async function trackedRead(key,operation){const started=performance.now();try{const result=await operation();diagnosticQuery(key,'read',started,result?.docs?.length||1);return result}catch(error){diagnosticQuery(key,'read',started);if(diagnosticsEnabled)console.warn('[Firestore] read failed',key,error);throw error}}
-async function trackedWrite(key,operation){const started=performance.now();firestoreDiagnostics.writes++;const entry=firestoreDiagnostics.queries[key]||{readCalls:0,documentsRead:0,writeAttempts:0,failures:0,lastMs:0};entry.writeAttempts++;firestoreDiagnostics.queries[key]=entry;try{const result=await operation();entry.lastMs=Math.round(performance.now()-started);if(diagnosticsEnabled)console.debug('[Firestore] write',key,{durationMs:entry.lastMs});return result}catch(error){firestoreDiagnostics.writeFailures++;entry.failures++;if(diagnosticsEnabled)console.warn('[Firestore] write failed',key,error);throw error}}
+async function trackedRead(key,operation){const started=performance.now();window.kindrichLoadingStart?.('Loading data...');try{const result=await operation();diagnosticQuery(key,'read',started,result?.docs?.length||1);return result}catch(error){diagnosticQuery(key,'read',started);if(diagnosticsEnabled)console.warn('[Firestore] read failed',key,error);throw error}finally{window.kindrichLoadingEnd?.()}}
+async function trackedWrite(key,operation){const started=performance.now();window.kindrichLoadingStart?.('Saving data...');firestoreDiagnostics.writes++;const entry=firestoreDiagnostics.queries[key]||{readCalls:0,documentsRead:0,writeAttempts:0,failures:0,lastMs:0};entry.writeAttempts++;firestoreDiagnostics.queries[key]=entry;try{const result=await operation();entry.lastMs=Math.round(performance.now()-started);if(diagnosticsEnabled)console.debug('[Firestore] write',key,{durationMs:entry.lastMs});return result}catch(error){firestoreDiagnostics.writeFailures++;entry.failures++;if(diagnosticsEnabled)console.warn('[Firestore] write failed',key,error);throw error}finally{window.kindrichLoadingEnd?.()}}
  function trackedSnapshot(key,reference,onNext,onError){firestoreDiagnostics.listeners++;const unsubscribe=onSnapshot(reference,snapshot=>{firestoreDiagnostics.listenerEvents++;const count=snapshot.size||(!snapshot.exists?0:1);diagnosticQuery(key,'read',performance.now(),count);if(diagnosticsEnabled)console.debug('[Firestore] listener event',key,{exists:snapshot.exists(),documents:count});onNext(snapshot)},onError);return ()=>{firestoreDiagnostics.listeners=Math.max(0,firestoreDiagnostics.listeners-1);unsubscribe()}}
 if(diagnosticsEnabled)window.getFirestoreDiagnostics=()=>JSON.parse(JSON.stringify({...firestoreDiagnostics,activeListeners:firestoreDiagnostics.listeners}));
 function backupJson(value){return JSON.stringify(value || {}, (key, item) => item && typeof item.toDate === "function" ? item.toDate().toISOString() : item, 2)}
@@ -642,6 +676,7 @@ async function applyWorkspaceSnapshot(snap){
     }catch(error){console.warn('Project fallback load failed',error)}
   }
   const merged=cleanWorkspace(mergeProjectDocuments(workspace));
+  applyFirebaseAdsSetting(merged);
   restoreBrowserLogin(merged);
   primeDocumentFingerprints(merged);
    lastWorkspaceFingerprint=documentFingerprint(merged);
@@ -656,7 +691,9 @@ let firestoreListenersStarted=false;
 function startFirestoreListeners(){
   if(firestoreListenersStarted)return;
   firestoreListenersStarted=true;
-  trackedSnapshot('workspace:main',workspaceRef,snap=>{applyWorkspaceSnapshot(snap).catch(error=>{console.warn('Workspace sync failed',error);window.firebaseWorkspaceReady=true;if(!loggedIn)render()})},err=>{console.warn('Workspace listener failed',err);window.firebaseWorkspaceReady=true;if(!loggedIn)render()});
+  let initialWorkspaceLoading=true;
+  window.kindrichLoadingStart?.('Loading workspace...');
+  trackedSnapshot('workspace:main',workspaceRef,snap=>{applyWorkspaceSnapshot(snap).catch(error=>{console.warn('Workspace sync failed',error);window.firebaseWorkspaceReady=true;if(!loggedIn)render()}).finally(()=>{if(initialWorkspaceLoading){initialWorkspaceLoading=false;window.kindrichLoadingEnd?.()}})},err=>{console.warn('Workspace listener failed',err);window.firebaseWorkspaceReady=true;if(!loggedIn)render();if(initialWorkspaceLoading){initialWorkspaceLoading=false;window.kindrichLoadingEnd?.()}});
   window.plannerEvents=[];
   window.savePlannerEvent=event=>{
     const id=event?.id||uid(),payload={...event,id,updatedAt:serverTimestamp()};
@@ -3852,6 +3889,12 @@ body.dark-mode table tbody tr.pending-delete-row:hover > td{background:#5c303a!i
       });
     }
     const existing=id?db.canvassing.find(item=>item.id===id):null;
+    const rawLines=existing?(Array.isArray(existing.lines)&&existing.lines.length?existing.lines:[existing]):[];
+    fields.querySelectorAll('#canvassLines [data-line]').forEach((row,index)=>{
+      const raw=rawLines[index]||{},cost=row.querySelector('[name="lineUnitCost"]'),qty=row.querySelector('[name="lineQty"]'),add=row.querySelector('[name="lineAdditionalAmount"]'),amount=row.querySelector('[name="lineAmount"]');
+      if(cost)cost.value=raw.unitCost===undefined||raw.unitCost===null||String(raw.unitCost).trim()===''?'':preciseMoneyInputValue(raw.unitCost);
+      if(amount)amount.value=moneyInputValue(num(qty?.value)*num(cost?.value)+num(add?.value));
+    });
     if(existing?.supplier){
       document.querySelectorAll('#canvassLines [data-line]').forEach(row=>{
         const select=row.querySelector('[name="lineSupplier"]'),manual=row.querySelector('[name="lineSupplierManual"]');
