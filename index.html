@@ -9,20 +9,50 @@
   #kindrichLoadingOverlay.show{display:flex}
   #kindrichLoadingOverlay .loading-box{display:flex;align-items:center;gap:10px;padding:13px 18px;border:1px solid #32456d;border-radius:10px;background:#101e3e;color:#eef4ff;box-shadow:0 14px 45px rgba(0,0,0,.32);font:600 13px Arial,sans-serif}
   #kindrichLoadingOverlay .loading-spinner{width:18px;height:18px;border:3px solid rgba(255,255,255,.28);border-top-color:#63d1ff;border-radius:50%;animation:kindrichLoadingSpin .75s linear infinite}
+  #kindrichSaveIndicator{position:fixed;right:18px;bottom:18px;z-index:100000;display:none;align-items:center;gap:8px;padding:8px 11px;border:1px solid #b9c9e5;border-radius:999px;background:#fff;color:#17233a;box-shadow:0 6px 20px rgba(23,35,58,.18);font:600 12px Arial,sans-serif}
+  #kindrichSaveIndicator.show{display:flex}
+  #kindrichSaveIndicator .loading-spinner{width:12px;height:12px;border-width:2px;border-color:#c8d3e6;border-top-color:#315da8}
   @keyframes kindrichLoadingSpin{to{transform:rotate(360deg)}}
 </style>
 <script>
   (function(){
-    let pending=0;
+    let pending=0,pendingSaves=0;
     function overlay(){
       let element=document.getElementById('kindrichLoadingOverlay');
       if(element)return element;
       element=document.createElement('div');element.id='kindrichLoadingOverlay';element.setAttribute('aria-live','polite');element.setAttribute('aria-busy','true');element.innerHTML='<div class="loading-box"><span class="loading-spinner" aria-hidden="true"></span><span data-loading-message>Loading data...</span></div>';
       (document.body||document.documentElement).appendChild(element);return element;
     }
-    window.kindrichLoadingStart=function(message){pending++;let element=overlay();element.querySelector('[data-loading-message]').textContent=message||'Loading data...';element.classList.add('show');element.setAttribute('aria-busy','true')};
-    window.kindrichLoadingEnd=function(){pending=Math.max(0,pending-1);if(!pending){let element=document.getElementById('kindrichLoadingOverlay');if(element){element.classList.remove('show');element.setAttribute('aria-busy','false')}}};
+    function saveIndicator(){let element=document.getElementById('kindrichSaveIndicator');if(element)return element;element=document.createElement('div');element.id='kindrichSaveIndicator';element.setAttribute('aria-live','polite');element.setAttribute('aria-busy','true');element.innerHTML='<span class="loading-spinner" aria-hidden="true"></span><span>Saving...</span>';(document.body||document.documentElement).appendChild(element);return element}
+    window.kindrichLoadingStart=function(message){if(/^Saving/i.test(message||'')){pendingSaves++;saveIndicator().classList.add('show');return}pending++;let element=overlay();element.querySelector('[data-loading-message]').textContent=message||'Loading data...';element.classList.add('show');element.setAttribute('aria-busy','true')};
+    window.kindrichLoadingEnd=function(kind){if(kind==='save'){pendingSaves=Math.max(0,pendingSaves-1);if(!pendingSaves){let element=document.getElementById('kindrichSaveIndicator');if(element)element.classList.remove('show')}return}pending=Math.max(0,pending-1);if(!pending){let element=document.getElementById('kindrichLoadingOverlay');if(element){element.classList.remove('show');element.setAttribute('aria-busy','false')}}};
   })();
+</script>
+
+<script>
+(function(){
+  function generateBoqPurchaseOrder(){
+    const p=project();
+    if(!p)return;
+    const rows=linked('items',p.id).filter(item=>!item.deleted);
+    if(!rows.length){alert('No BOQ items found for this project.');return}
+    const companyRecord=(companies||[]).find(item=>String(item.id)===String(p.company)||String(item.name)===String(p.company))||{},companyName=companyRecord.name||p.company||'KINDRICH CONSUMER GOODS TRADING',poNo='PO-'+(p.code||'PROJECT')+'-'+String(Date.now()).slice(-6),total=rows.reduce((sum,item)=>sum+itemPoQty(item)*itemPoMc(item),0),body=rows.map(item=>{const qty=itemPoQty(item),unitCost=itemPoMc(item),lineTotal=qty*unitCost;return '<tr><td>'+esc(item.description||'')+'</td><td class="number">'+String(qty)+'</td><td class="number">'+money(unitCost)+'</td><td>'+esc(item.unit||'')+'</td><td class="number">'+money(lineTotal)+'</td></tr>'}).join(''),doc='<!doctype html><html><head><meta charset="utf-8"><title>'+esc(poNo)+'</title><style>body{font:13px Arial,sans-serif;color:#17233a;margin:36px}h1{text-align:center;font-size:22px;margin:0 0 5px}h2{text-align:center;font-size:16px;font-weight:normal;margin:0 0 22px}.meta{display:grid;grid-template-columns:1fr 1fr;gap:8px 24px;margin:18px 0}.box{border:1px solid #222;padding:10px;margin:14px 0}table{width:100%;border-collapse:collapse;margin-top:18px}th,td{border:1px solid #222;padding:8px;text-align:left;vertical-align:top}th{background:#f1f1f1}.number{text-align:right}.total{text-align:right;font-size:16px;margin-top:14px}.sign{display:grid;grid-template-columns:1fr 1fr 1fr;gap:40px;margin-top:70px}.line{border-top:1px solid #222;padding-top:8px;text-align:center}@media print{button{display:none}}</style></head><body><button onclick="window.print()">Print / Save as PDF</button><h1>KINDRICH PURCHASE ORDER</h1><h2>'+esc(companyName)+'</h2><div class="meta"><div><b>PO No.:</b> '+esc(poNo)+'</div><div><b>Date:</b> '+esc(todayLocal())+'</div><div><b>Project:</b> '+esc(p.name||'')+'</div><div><b>Project Code:</b> '+esc(p.code||'')+'</div><div><b>Client:</b> '+esc(p.client||'')+'</div><div><b>Location:</b> '+esc(p.location||'')+'</div></div><table><thead><tr><th>Item / Material</th><th>Qty</th><th>Unit Cost</th><th>Unit</th><th>Total Cost</th></tr></thead><tbody>'+body+'</tbody></table><div class="total"><b>Grand Total: '+money(total)+'</b></div><div class="sign"><div class="line">Prepared By</div><div class="line">Approved By</div><div class="line">Received By</div></div></body></html>',popup=window.open('','_blank');if(!popup){alert('Please allow pop-ups to generate the P.O.');return}popup.document.write(doc);popup.document.close();popup.focus();setTimeout(()=>popup.print(),300)
+  }
+  window.generateBoqPurchaseOrder=generateBoqPurchaseOrder;
+  function installBoqPurchaseOrder(){
+    if(typeof detail!=='function'){setTimeout(installBoqPurchaseOrder,0);return}
+    const baseDetailForBoqPurchaseOrder=detail;
+    detail=function(){
+    baseDetailForBoqPurchaseOrder.apply(this,arguments);
+    if(page!=='detail'||tab!=='items')return;
+    const addButton=document.getElementById('addRow'),bar=addButton?.parentElement;
+    if(!bar||document.getElementById('generateBoqPurchaseOrder'))return;
+    const button=document.createElement('button');button.className='btn secondary';button.type='button';button.id='generateBoqPurchaseOrder';button.title='Generate Purchase Order from BOQ';button.setAttribute('aria-label','Generate Purchase Order from BOQ');button.innerHTML='<i class="bi bi-file-earmark-pdf" aria-hidden="true"></i> Generate P.O.';button.onclick=generateBoqPurchaseOrder;bar.insertBefore(button,addButton);
+    };
+    if(typeof render==='function')render();
+  }
+  installBoqPurchaseOrder();
+})();
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -461,8 +491,8 @@ function diagnosticQuery(key,kind,started,count=0){
   firestoreDiagnostics.queries[key]=entry;
   if(diagnosticsEnabled)console.debug('[Firestore]',kind,key,{durationMs:Math.round(duration),documents:count});
 }
-async function trackedRead(key,operation){const started=performance.now();window.kindrichLoadingStart?.('Loading data...');try{const result=await operation();diagnosticQuery(key,'read',started,result?.docs?.length||1);return result}catch(error){diagnosticQuery(key,'read',started);if(diagnosticsEnabled)console.warn('[Firestore] read failed',key,error);throw error}finally{window.kindrichLoadingEnd?.()}}
-async function trackedWrite(key,operation){const started=performance.now();window.kindrichLoadingStart?.('Saving data...');firestoreDiagnostics.writes++;const entry=firestoreDiagnostics.queries[key]||{readCalls:0,documentsRead:0,writeAttempts:0,failures:0,lastMs:0};entry.writeAttempts++;firestoreDiagnostics.queries[key]=entry;try{const result=await operation();entry.lastMs=Math.round(performance.now()-started);if(diagnosticsEnabled)console.debug('[Firestore] write',key,{durationMs:entry.lastMs});return result}catch(error){firestoreDiagnostics.writeFailures++;entry.failures++;if(diagnosticsEnabled)console.warn('[Firestore] write failed',key,error);throw error}finally{window.kindrichLoadingEnd?.()}}
+async function trackedRead(key,operation){const started=performance.now();window.kindrichLoadingStart?.('Loading data...');try{const result=await operation();diagnosticQuery(key,'read',started,result?.docs?.length||1);return result}catch(error){diagnosticQuery(key,'read',started);if(diagnosticsEnabled)console.warn('[Firestore] read failed',key,error);throw error}finally{window.kindrichLoadingEnd?.('read')}}
+async function trackedWrite(key,operation){const started=performance.now();window.kindrichLoadingStart?.('Saving data...');firestoreDiagnostics.writes++;const entry=firestoreDiagnostics.queries[key]||{readCalls:0,documentsRead:0,writeAttempts:0,failures:0,lastMs:0};entry.writeAttempts++;firestoreDiagnostics.queries[key]=entry;try{const result=await operation();entry.lastMs=Math.round(performance.now()-started);if(diagnosticsEnabled)console.debug('[Firestore] write',key,{durationMs:entry.lastMs});return result}catch(error){firestoreDiagnostics.writeFailures++;entry.failures++;if(diagnosticsEnabled)console.warn('[Firestore] write failed',key,error);throw error}finally{window.kindrichLoadingEnd?.('save')}}
  function trackedSnapshot(key,reference,onNext,onError){firestoreDiagnostics.listeners++;const unsubscribe=onSnapshot(reference,snapshot=>{firestoreDiagnostics.listenerEvents++;const count=snapshot.size||(!snapshot.exists?0:1);diagnosticQuery(key,'read',performance.now(),count);if(diagnosticsEnabled)console.debug('[Firestore] listener event',key,{exists:snapshot.exists(),documents:count});onNext(snapshot)},onError);return ()=>{firestoreDiagnostics.listeners=Math.max(0,firestoreDiagnostics.listeners-1);unsubscribe()}}
 if(diagnosticsEnabled)window.getFirestoreDiagnostics=()=>JSON.parse(JSON.stringify({...firestoreDiagnostics,activeListeners:firestoreDiagnostics.listeners}));
 function backupJson(value){return JSON.stringify(value || {}, (key, item) => item && typeof item.toDate === "function" ? item.toDate().toISOString() : item, 2)}
